@@ -1,0 +1,130 @@
+import { describe, expect, it } from 'vitest';
+import {
+  identificarTipoEntidade,
+  normalizarTipoDeclarado,
+  PASTAS_CONTRARIUS_PADRAO,
+  tipoPorPasta,
+} from '../../src/contrarius/identify';
+
+describe('tipoPorPasta', () => {
+  it('identifica Consciência na pasta canônica', () => {
+    expect(tipoPorPasta('02_Consciencias/C-1.md')).toBe('consciencia');
+  });
+
+  it('identifica Retrovida recursivamente', () => {
+    expect(tipoPorPasta('03_Retrovidas/Nucleo/Sub/V-1.md')).toBe('retrovida');
+  });
+
+  it('identifica Relação', () => {
+    expect(tipoPorPasta('04_Relacoes/R-1.md')).toBe('relacao');
+  });
+
+  it('identifica Evento recursivamente', () => {
+    expect(tipoPorPasta('05_Eventos/Capitulo/E-1.md')).toBe('evento');
+  });
+
+  it('identifica Lugar recursivamente', () => {
+    expect(tipoPorPasta('06_Lugares/Europa/Franca/L-1.md')).toBe('lugar');
+  });
+
+  it('aceita barras Windows', () => {
+    expect(tipoPorPasta('05_Eventos\\Sub\\E.md')).toBe('evento');
+  });
+
+  it('ignora diferenças de caixa', () => {
+    expect(tipoPorPasta('05_EVENTOS/Sub/E.md')).toBe('evento');
+  });
+
+  it('aceita barras repetidas e externas', () => {
+    expect(tipoPorPasta('/05_Eventos//Sub/E.md')).toBe('evento');
+  });
+
+  it('não confunde prefixos de pasta', () => {
+    expect(tipoPorPasta('05_Eventos_Arquivados/E.md')).toBeNull();
+  });
+
+  it('não encontra pasta canônica no meio de outro caminho', () => {
+    expect(tipoPorPasta('Arquivo/05_Eventos/E.md')).toBeNull();
+  });
+
+  it('aceita configuração de pasta personalizada aninhada', () => {
+    const custom = { ...PASTAS_CONTRARIUS_PADRAO, evento: 'Narrativa/Eventos' };
+    expect(tipoPorPasta('Narrativa/Eventos/Ato1/E.md', custom)).toBe('evento');
+  });
+
+  it('ignora configuração vazia', () => {
+    const custom = { ...PASTAS_CONTRARIUS_PADRAO, evento: '' };
+    expect(tipoPorPasta('E.md', custom)).toBeNull();
+  });
+});
+
+describe('normalizarTipoDeclarado', () => {
+  it('normaliza Consciência com acento', () => {
+    expect(normalizarTipoDeclarado('Consciência')).toBe('consciencia');
+  });
+
+  it('normaliza Relação com acento e caixa alta', () => {
+    expect(normalizarTipoDeclarado('RELAÇÃO')).toBe('relacao');
+  });
+
+  it('apara espaços', () => {
+    expect(normalizarTipoDeclarado(' Retrovida ')).toBe('retrovida');
+  });
+
+  it('reconhece Evento e Lugar', () => {
+    expect(normalizarTipoDeclarado('Evento')).toBe('evento');
+    expect(normalizarTipoDeclarado('Lugar')).toBe('lugar');
+  });
+
+  it('aceita primeiro item válido de lista conforme normStr', () => {
+    expect(normalizarTipoDeclarado(['', 'Evento'])).toBe('evento');
+  });
+
+  it('retorna null para tipo desconhecido', () => {
+    expect(normalizarTipoDeclarado('desconhecido')).toBeNull();
+  });
+
+  it('retorna null para valores ausentes e objetos', () => {
+    expect(normalizarTipoDeclarado(null)).toBeNull();
+    expect(normalizarTipoDeclarado({ tipo: 'Evento' })).toBeNull();
+  });
+});
+
+describe('identificarTipoEntidade', () => {
+  it('usa a pasta como autoridade em conflito', () => {
+    const result = identificarTipoEntidade('05_Eventos/E.md', { tipo: 'Lugar' });
+    expect(result.tipo).toBe('evento');
+    expect(result.tipoPasta).toBe('evento');
+    expect(result.tipoFrontmatter).toBe('lugar');
+    expect(result.conflito).toBe(true);
+  });
+
+  it('usa tipo do frontmatter fora das pastas', () => {
+    const result = identificarTipoEntidade('Notas/E.md', { tipo: 'Evento' });
+    expect(result.tipo).toBe('evento');
+    expect(result.conflito).toBe(false);
+  });
+
+  it('usa a pasta quando o tipo não foi declarado', () => {
+    const result = identificarTipoEntidade('06_Lugares/L.md', {});
+    expect(result.tipo).toBe('lugar');
+    expect(result.tipoDeclarado).toBe('');
+  });
+
+  it('não marca conflito quando pasta e frontmatter concordam', () => {
+    expect(identificarTipoEntidade('04_Relacoes/R.md', { tipo: 'Relação' }).conflito).toBe(false);
+  });
+
+  it('preserva o texto normalizado do tipo declarado para diagnóstico', () => {
+    expect(identificarTipoEntidade('05_Eventos/E.md', { tipo: '  Cidade  ' }).tipoDeclarado).toBe('Cidade');
+  });
+
+  it('retorna nulo quando não há identificação', () => {
+    expect(identificarTipoEntidade('Notas/X.md', {}).tipo).toBeNull();
+  });
+
+  it('respeita pastas personalizadas', () => {
+    const custom = { ...PASTAS_CONTRARIUS_PADRAO, lugar: 'Canon/Locais' };
+    expect(identificarTipoEntidade('Canon/Locais/L.md', {}, custom).tipo).toBe('lugar');
+  });
+});
