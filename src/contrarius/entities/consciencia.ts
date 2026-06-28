@@ -1,5 +1,6 @@
 import type { Consciencia } from '../types';
 import { normStr, normList, normBool, primeiroPresente } from '../normalize';
+import { deepCopyYaml, extractBasename } from '../utils';
 
 const CAMPOS_CONHECIDOS = new Set([
   'tipo',
@@ -15,30 +16,6 @@ const CAMPOS_CONHECIDOS = new Set([
   'grupo_karmico',
   'reaparece',
 ]);
-
-function deepCopyYaml(value: unknown): unknown {
-  if (value === null || value === undefined) return value;
-  if (typeof value !== 'object') return value;
-  if (Array.isArray(value)) {
-    return (value as unknown[]).map(deepCopyYaml);
-  }
-  const obj = value as Record<string, unknown>;
-  const copy: Record<string, unknown> = {};
-  for (const key of Object.keys(obj)) {
-    copy[key] = deepCopyYaml(obj[key]);
-  }
-  return copy;
-}
-
-function extractBasename(filePath: string): string {
-  const normalized = filePath.replace(/\\/g, '/');
-  const parts = normalized.split('/');
-  const filename = parts[parts.length - 1] ?? '';
-  if (filename.endsWith('.md')) {
-    return filename.slice(0, -3);
-  }
-  return filename;
-}
 
 export function normalizarConsciencia(
   frontmatter: Readonly<Record<string, unknown>>,

@@ -1,4 +1,5 @@
 ﻿import type { TFile } from 'obsidian';
+import { deepCopyYaml } from './utils';
 
 /** Interface de dependências injetáveis — permite mock completo nos testes. */
 export interface ReaderDeps {
@@ -19,20 +20,6 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   }
   const prototype = Object.getPrototypeOf(value) as unknown;
   return prototype === Object.prototype || prototype === null;
-}
-
-function deepCopyYaml(value: unknown): unknown {
-  if (value === null || value === undefined) return value;
-  if (typeof value !== 'object') return value;
-  if (Array.isArray(value)) {
-    return (value as unknown[]).map(deepCopyYaml);
-  }
-  const obj = value as Record<string, unknown>;
-  const copy: Record<string, unknown> = {};
-  for (const key of Object.keys(obj)) {
-    copy[key] = deepCopyYaml(obj[key]);
-  }
-  return copy;
 }
 
 function extractFrontmatterBlock(content: string): string | null {
