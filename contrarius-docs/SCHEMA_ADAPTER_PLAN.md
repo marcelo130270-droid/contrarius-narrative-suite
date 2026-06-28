@@ -475,6 +475,8 @@ export interface Consciencia extends ContrariusBase {
 // ──────────────────────────────────────────────────────────────
 export interface Retrovida extends ContrariusBase {
   tipoEntidade: 'retrovida';
+  /** Basename do arquivo .md sem extensão — identificador estável de sistema. */
+  id: string;
   /**
    * Referência à Consciência proprietária.
    * Aliases em ordem de precedência: consc_id → consciencia
@@ -736,6 +738,7 @@ Consciencia {
 Retrovida {
   filePath:            "03_Retrovidas/retrovida-aristarco-1820.md"
   tipoEntidade:        "retrovida"
+  id:                  "retrovida-aristarco-1820"      // basename
   conscId:             "Aristarco Velmonte"           // alias: consciencia → consc_id
   vida:                "1820-1891"
   nomes:               ["Pietro Mancini", "Piero Mancini"]
@@ -868,6 +871,7 @@ A resolução usa `primeiroPresente(fm, aliases)`: percorre a lista de aliases e
 
 | Entidade | Campo normalizado | Aliases (ordem de precedência) |
 |---|---|---|
+| Retrovida | `id` | `id` → basename |
 | Retrovida | `conscId` | `consc_id` → `consciencia` |
 | Retrovida | `nomes` | `nomes` → `nome` |
 | Retrovida | `pov` | `pov` → `historicidade` |
@@ -880,6 +884,15 @@ A resolução usa `primeiroPresente(fm, aliases)`: percorre a lista de aliases e
 **Chaves com espaços** (`"nome preferido"`): são acessadas diretamente via `fm["nome preferido"]` — o frontmatter YAML suporta chaves entre aspas.
 
 **Basename como último fallback para `id`:** garante que todo registro tenha `id` não-vazio mesmo em arquivos completamente sem campos de identidade explícitos.
+
+**Regras específicas do `id` da Retrovida:**
+
+- O `id` da Retrovida usa a propriedade `id` do frontmatter quando ela estiver preenchida; na ausência dela, usa o basename do arquivo Markdown.
+- O basename não inclui a extensão `.md` (ex.: `C-001_V01_Rogier_Del_Vignal.md` → `id === "C-001_V01_Rogier_Del_Vignal"`).
+- Caminhos com `/` e `\` devem ser aceitos; o separador não afeta o basename extraído.
+- O arquivo nunca deve ser renomeado para se adaptar ao plugin — o basename é extraído do nome existente, nunca alterado.
+- `vida` **não** é o identificador estável da retrovida; `vida` representa apenas a posição ou sequência daquela vida dentro da consciência (ex.: `"1820-1891"` ou `"V01"`).
+- O `id` explícito do frontmatter tem precedência sobre o basename; o basename é usado somente quando `id` está ausente ou vazio.
 
 ### 6.4 Códigos estáveis
 
@@ -1215,9 +1228,11 @@ frontmatter com tipo divergente { tipo: "evento", nome: "X" } →
 
 ```
 fixture retrovida-completa.md → Retrovida com todos os campos
+  → id === "retrovida-completa"            // basename (sem extensão .md)
   → conscId === "Aristarco Velmonte"       // via alias "consciencia"
   → nomes === ["Pietro Mancini", "Piero Mancini"]
   → pov === "pov externo"                  // via alias "historicidade"
+  → vida !== id                            // vida não é identificador estável
 
 { consc_id: "A", consciencia: "B" } →
   → conscId === "A"                        // consc_id tem precedência
@@ -1236,6 +1251,19 @@ fixture retrovida-completa.md → Retrovida com todos os campos
 
 { historicidade: "H" } →
   → pov === "H"                            // fallback para historicidade
+
+// id: basename quando ausente do frontmatter
+filePath "03_Retrovidas/C-001_V01_Rogier_Del_Vignal.md", fm sem campo id →
+  → id === "C-001_V01_Rogier_Del_Vignal"  // basename sem extensão
+
+// id: propriedade explícita prevalece sobre basename
+filePath "03_Retrovidas/qualquer-nome.md", fm com { id: "C-001_V01" } →
+  → id === "C-001_V01"                     // id explícito tem precedência
+
+// vida não substitui id
+fm com { vida: "1820-1891" }, sem campo id, filePath "03_Retrovidas/foo.md" →
+  → vida === "1820-1891"
+  → id === "foo"                           // vida não é o identificador
 ```
 
 ---
@@ -1278,6 +1306,10 @@ git diff --name-only | grep -v "src/contrarius\|test/contrarius"
 | **1A-A8** | `id` preenchido mesmo sem campo explícito | Basename do arquivo aparece em `id` quando nenhum alias presente |
 | **1A-A9** | Nenhum `any` explícito nos arquivos de produção | `grep -rn ": any\|as any" src/contrarius/` → vazio |
 | **1A-A10** | Zero arquivos do upstream modificados | `git diff --name-only \| grep -v contrarius` → vazio |
+| **1A-A11** | Fallback do `id` da Retrovida pelo basename | Arquivo sem campo `id` no frontmatter → `id === basename-sem-extensão` |
+| **1A-A12** | `id` explícito da Retrovida prevalece sobre basename | Frontmatter com `id: "C-001_V01"` → `id === "C-001_V01"`, independente do nome do arquivo |
+| **1A-A13** | Arquivo de Retrovida jamais renomeado pelo plugin | Testes não invocam `vault.rename`, `vault.modify` nem qualquer escrita; nome original preservado integralmente |
+| **1A-A14** | `id` e `vida` são campos distintos e não intercambiáveis | `vida: "1820-1891"` em retrovida sem `id` explícito → `vida === "1820-1891"` e `id === basename`, nunca `id === vida` |
 
 ---
 

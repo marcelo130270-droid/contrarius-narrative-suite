@@ -36,6 +36,8 @@ export interface Consciencia extends ContrariusBase {
 
 export interface Retrovida extends ContrariusBase {
   tipoEntidade: "retrovida";
+  /** Basename do arquivo .md sem extensão — identificador estável de sistema. */
+  id: string;
   conscId: string;
   vida: string;
   nomes: readonly string[];
