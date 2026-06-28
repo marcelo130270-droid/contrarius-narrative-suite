@@ -10,7 +10,7 @@
 ## Sumário
 
 1. [Premissas e estado do repositório](#1-premissas-e-estado-do-repositório)
-2. [Lista completa dos 22 arquivos propostos](#2-lista-completa-dos-22-arquivos-propostos)
+2. [Lista completa dos 21 arquivos propostos](#2-lista-completa-dos-21-arquivos-propostos)
    - 2.1 [Arquivos de produção (8)](#21-arquivos-de-produção-8)
    - 2.2 [Fixtures fictícias (6)](#22-fixtures-fictícias-6)
    - 2.3 [Arquivos de teste (8)](#23-arquivos-de-teste-8)
@@ -49,7 +49,7 @@
 
 ---
 
-## 2. Lista completa dos 22 arquivos propostos
+## 2. Lista completa dos 21 arquivos propostos
 
 ### 2.1 Arquivos de produção (8)
 
@@ -175,7 +175,7 @@
 
 ---
 
-### 2.2 Fixtures fictícias (6)
+### 2.2 Fixtures fictícias (5)
 
 As fixtures são arquivos `.md` com frontmatter YAML inteiramente fictício — nomes e dados que não existem em nenhum Vault real. Servem exclusivamente para testes unitários.
 
@@ -185,40 +185,18 @@ As fixtures são arquivos `.md` com frontmatter YAML inteiramente fictício — 
 
 | Atributo | Valor |
 |---|---|
-| **Responsabilidade** | Fixture de Consciência com todos os campos canônicos preenchidos, incluindo listas YAML e links Obsidian. |
-| **Motivo** | Exercitar o caminho feliz completo do parser de Consciência. |
+| **Responsabilidade** | Fixture deliberadamente mínima de Consciência, incluindo um campo desconhecido, `grupocarma` com link Obsidian e `reaparece` como booleano. |
+| **Motivo** | Exercitar strip de links em listas, normalização de booleano e preservação de campos desconhecidos em um único arquivo de fixture. |
 
 ```markdown
 ---
-tipo: consciencia
 nome: Aristarco Velmonte
 ident_extraf:
   - Aris
-  - O Errante
-nucleo_geo:
-  - Europa Central
-religiao:
-  - Catolicismo
-holopensenes: []
-grupokarma:
-  - Grupo Alfa
-reaparece:
-  - "[[Aristarco Sessao 3]]"
----
-```
-
----
-
-#### `test/contrarius/__fixtures__/consciencia-minima.md`
-
-| Atributo | Valor |
-|---|---|
-| **Responsabilidade** | Fixture de Consciência com apenas o campo `nome` — todos os demais ausentes. |
-| **Motivo** | Exercitar o comportamento de campos ausentes (devem produzir `""` ou `[]`, nunca `undefined`). |
-
-```markdown
----
-nome: Sem Campos
+grupocarma:
+  - "[[C-002]]"
+reaparece: true
+xyz_desconhecido: valor-teste
 ---
 ```
 
@@ -488,8 +466,8 @@ export interface Consciencia extends ContrariusBase {
   nucleoGeo: string[];
   religiao: string[];
   holopensenes: string[];
-  grupokarma: string[];
-  reaparece: string[];
+  grupocarma: string[];
+  reaparece: boolean;
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -668,18 +646,27 @@ export function primeiroPresente(
 
 /** Interface de dependências injetáveis — permite mock completo nos testes. */
 export interface ReaderDeps {
+  /** Caminho primário: MetadataCache do Obsidian. Retorna null enquanto o cache não populou. */
   getFileCache: (file: TFile) => { frontmatter?: Record<string, unknown> } | null;
+  /** Caminho de fallback: lê o conteúdo bruto quando getFileCache não fornece frontmatter. */
   cachedRead:   (file: TFile) => Promise<string>;
+  /** Interpreta o bloco YAML extraído do conteúdo bruto no caminho de fallback. Importado do pacote obsidian. */
+  parseYaml:    (yaml: string) => Record<string, unknown>;
 }
 
 /**
  * Lê o frontmatter de um arquivo sem nenhuma modificação.
- * Retorna null se o arquivo não contiver bloco frontmatter.
- * Nunca chama vault.modify() ou vault.create().
+ *
+ * Garantias:
+ *   - Nunca chama vault.modify() ou vault.create().
+ *   - Retorna null quando o arquivo não contém bloco frontmatter.
+ *   - Retorna uma cópia rasa do objeto retornado pelo cache — nunca uma referência
+ *     mutável ao objeto interno do MetadataCache.
+ *   - Falhas de parsing são registradas como aviso; não interrompem indexações futuras.
  *
  * Estratégia:
- *   1. Tenta metadataCache.getFileCache(file).frontmatter (síncrono)
- *   2. Fallback: cachedRead(file) + parseFrontmatterFromContent()
+ *   1. Caminho primário: deps.getFileCache(file).frontmatter (síncrono, via MetadataCache).
+ *   2. Fallback: deps.cachedRead(file) → extrai bloco ---...--- → deps.parseYaml() do pacote obsidian.
  */
 export async function lerFrontmatter(
   file: TFile,
@@ -735,9 +722,9 @@ Consciencia {
   nucleoGeo:           ["Europa Central"]
   religiao:            ["Catolicismo"]
   holopensenes:        []                             // lista vazia → []
-  grupokarma:          ["Grupo Alfa"]
-  reaparece:           ["Aristarco Sessao 3"]         // links stripped
-  frontmatterRaw:      { tipo: "consciencia", nome: ..., reaparece: ["[[Aristarco Sessao 3]]"] }
+  grupocarma:          ["C-002"]                      // link stripped
+  reaparece:           true                           // booleano
+  frontmatterRaw:      { tipo: "consciencia", nome: ..., grupocarma: ["[[C-002]]"], reaparece: true }
   camposDesconhecidos: {}
   avisos:              []
 }
@@ -1012,7 +999,7 @@ Os commits seguem a ordem de dependência: tipos → funções puras → I/O →
 
 | Item | Detalhe |
 |---|---|
-| **Arquivos** | `src/contrarius/entities/consciencia.ts`, `test/contrarius/__fixtures__/consciencia-basica.md`, `test/contrarius/__fixtures__/consciencia-minima.md`, `test/contrarius/entities/consciencia.test.ts` |
+| **Arquivos** | `src/contrarius/entities/consciencia.ts`, `test/contrarius/__fixtures__/consciencia-basica.md`, `test/contrarius/entities/consciencia.test.ts` |
 | **Objetivo** | Primeiro parser completo de entidade com fixtures reais e testes. Valida a arquitetura por tipo específico. |
 | **Testes correspondentes** | `test/contrarius/entities/consciencia.test.ts` — campos completos, campos ausentes, tipo divergente, links, camposDesconhecidos. |
 | **Critérios satisfeitos** | A4, A7, A8, A9, A10 (para Consciência) |
@@ -1142,6 +1129,19 @@ Provar que o adaptador consegue ler um arquivo de Consciência e um arquivo de R
 - `ContrariusBase`
 - `Consciencia`
 - `Retrovida`
+- `IndexError`
+- `ContrariusIndex` — **escopo restrito da Fase 1A** (somente os dois tipos implementados):
+
+```typescript
+interface ContrariusIndex {
+  consciencias: Consciencia[];
+  retrovidas:   Retrovida[];
+  erros:        IndexError[];
+  // eventos, lugares e relacoes serão acrescentados quando seus tipos forem implementados
+}
+```
+
+> A definição completa de `ContrariusIndex` (seção 4) inclui todos os cinco maps; na Fase 1A usa-se esta versão reduzida até que os parsers de Evento, Lugar e Relação sejam implementados.
 
 **`src/contrarius/normalize.ts`** — exports obrigatórios:
 - `stripObsidianLink(v: string): string`
@@ -1152,7 +1152,7 @@ Provar que o adaptador consegue ler um arquivo de Consciência e um arquivo de R
 - `primeiroPresente(fm: Record<string, unknown>, chaves: string[]): unknown`
 
 **`src/contrarius/reader.ts`** — exports obrigatórios:
-- `ReaderDeps` (interface)
+- `ReaderDeps` (interface, com `getFileCache`, `cachedRead` e `parseYaml`)
 - `lerFrontmatter(file: TFile, deps: ReaderDeps): Promise<Record<string, unknown> | null>`
 
 **`src/contrarius/entities/consciencia.ts`** — export obrigatório:
@@ -1193,20 +1193,18 @@ primeiroPresente({}, ["a","b"])        → undefined
 **`test/contrarius/entities/consciencia.test.ts`** — casos obrigatórios:
 
 ```
-fixture consciencia-basica.md → Consciencia com todos os campos
+fixture consciencia-basica.md →
   → id === "consciencia-basica"
   → nome === "Aristarco Velmonte"
-  → identExtraf === ["Aris", "O Errante"]
-  → reaparece === ["Aristarco Sessao 3"]    // link stripped
-  → holopensenes === []
+  → identExtraf === ["Aris"]
+  → grupocarma === ["C-002"]                    // link stripped de "[[C-002]]"
+  → reaparece === true                          // booleano
+  → camposDesconhecidos.xyz_desconhecido === "valor-teste"
 
-frontmatter mínimo { nome: "X" } →
+frontmatter inline { nome: "X" } →
   → identExtraf === []
+  → reaparece === false                         // booleano ausente → false
   → avisos === []
-  → camposDesconhecidos === {}
-
-frontmatter com campo desconhecido { nome: "X", xyz: "foo" } →
-  → camposDesconhecidos.xyz === "foo"
 
 frontmatter com tipo divergente { tipo: "evento", nome: "X" } →
   → tipoEntidade === "consciencia"    // pasta prevalece
@@ -1274,8 +1272,8 @@ git diff --name-only | grep -v "src/contrarius\|test/contrarius"
 | **1A-A2** | Suite completa não regride | `npm test` → sem novas falhas |
 | **1A-A3** | TypeScript compila sem erros | `tsc --noEmit` → saída vazia |
 | **1A-A4** | Aliases de Retrovida resolvidos corretamente | Casos `consc_id/consciencia`, `nomes/nome`, `pov/historicidade` passam |
-| **1A-A5** | Links Obsidian stripped em Consciência | `reaparece: ["[[X]]"]` → `["X"]` no objeto normalizado |
-| **1A-A6** | Campos ausentes produzem valores padrão | `consciencia-minima.md` → todos os arrays são `[]` e strings são `""` |
+| **1A-A5** | Links Obsidian stripped em listas | `grupocarma: ["[[C-002]]"]` → `grupocarma: ["C-002"]` no objeto normalizado |
+| **1A-A6** | `reaparece` normalizado como booleano | `consciencia-basica.md` com `reaparece: true` → `reaparece === true` (boolean); ausente → `false` |
 | **1A-A7** | Campos desconhecidos preservados | Campo extra no frontmatter aparece em `camposDesconhecidos` |
 | **1A-A8** | `id` preenchido mesmo sem campo explícito | Basename do arquivo aparece em `id` quando nenhum alias presente |
 | **1A-A9** | Nenhum `any` explícito nos arquivos de produção | `grep -rn ": any\|as any" src/contrarius/` → vazio |
