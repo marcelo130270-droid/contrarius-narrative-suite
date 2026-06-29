@@ -1,6 +1,6 @@
 import type { TFile } from 'obsidian';
 import type {
-  ContrariusIndex, ContrariusTipoEntidade, IndexError,
+  ContrariusIndex, ContrariusTipoEntidade, IndexError, IndexWarning,
   Consciencia, Retrovida, Evento, Lugar, Relacao,
 } from './types';
 import type { ReaderDeps } from './reader';
@@ -61,6 +61,7 @@ export async function indexarContrarius(
   const eventos: Evento[] = [];
   const lugares: Lugar[] = [];
   const relacoes: Relacao[] = [];
+  const avisosIndexacao: IndexWarning[] = [];
   const erros: IndexError[] = [];
 
   let files: TFile[];
@@ -68,7 +69,7 @@ export async function indexarContrarius(
     files = Array.from(deps.getMarkdownFiles()).sort((a, b) => a.path.localeCompare(b.path));
   } catch (error) {
     return {
-      consciencias, retrovidas, eventos, lugares, relacoes,
+      consciencias, retrovidas, eventos, lugares, relacoes, avisosIndexacao,
       erros: [{ filePath: '', mensagem: `Falha ao listar arquivos Markdown: ${mensagemErro(error)}` }],
     };
   }
@@ -97,6 +98,12 @@ export async function indexarContrarius(
         filePath: file.path,
         campo: 'tipo',
         mensagem: `Conflito de tipo: pasta indica "${identificacao.tipoPasta}" e frontmatter declara "${identificacao.tipoFrontmatter}". A pasta foi usada.`,
+      });
+    } else if (identificacao.incompatibilidadeLegada) {
+      avisosIndexacao.push({
+        filePath: file.path,
+        campo: 'tipo',
+        mensagem: `Tipo legado incompatível com a pasta; classificada como ${identificacao.tipo === 'retrovida' ? 'Retrovida' : 'Consciência'} pré-humana.`,
       });
     } else if (identificacao.tipoFrontmatter === null && identificacao.tipoDeclarado !== '') {
       erros.push({
@@ -127,5 +134,5 @@ export async function indexarContrarius(
   registrarDuplicados(lugares, 'lugar', erros);
   registrarDuplicados(relacoes, 'relacao', erros);
 
-  return { consciencias, retrovidas, eventos, lugares, relacoes, erros };
+  return { consciencias, retrovidas, eventos, lugares, relacoes, avisosIndexacao, erros };
 }

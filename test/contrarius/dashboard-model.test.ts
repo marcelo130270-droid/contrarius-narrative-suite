@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   agruparRetrovidasPorConsciencia,
+  construirDiagnosticos,
   construirResumo,
   filtrarConsciencias,
   filtrarEventos,
@@ -41,6 +42,7 @@ function consciencia(overrides: Partial<Consciencia> = {}): Consciencia {
     holopensenes: [],
     grupocarma: ['C-002'],
     reaparece: true,
+    naturezaConsciencial: 'humana',
     ...overrides,
   };
 }
@@ -64,6 +66,7 @@ function retrovida(overrides: Partial<Retrovida> = {}): Retrovida {
     holopensenes: [],
     religiao: [],
     classeSocial: [],
+    naturezaConsciencial: 'humana',
     ...overrides,
   };
 }
@@ -157,6 +160,7 @@ function index(): ContrariusIndex {
     eventos: [evento()],
     lugares: [lugar()],
     relacoes: [relacao({ avisos: ['campo ausente', 'alias legado'] })],
+    avisosIndexacao: [],
     erros: [{ filePath: 'x.md', mensagem: 'erro' }],
   };
 }
@@ -173,8 +177,27 @@ describe('construirResumo', () => {
     });
   });
 
-  it('soma avisos e erros', () => {
-    expect(construirResumo(index())).toMatchObject({ avisos: 3, erros: 1 });
+  it('soma avisos internos, avisos de indexação e erros', () => {
+    const value = index();
+    const withWarning = {
+      ...value,
+      avisosIndexacao: [{ filePath: 'p.md', mensagem: 'aviso' }],
+    };
+    expect(construirResumo(withWarning)).toMatchObject({
+      avisosInternos: 3, avisosIndexacao: 1, avisos: 4, erros: 1,
+    });
+  });
+
+  it('conta consciências e retrovidas pré-humanas', () => {
+    const value = index();
+    const withPreHuman = {
+      ...value,
+      consciencias: [consciencia({ naturezaConsciencial: 'pre-humana' })],
+      retrovidas: [retrovida({ naturezaConsciencial: 'pre-humana' })],
+    };
+    expect(construirResumo(withPreHuman)).toMatchObject({
+      conscienciasPreHumanas: 1, retrovidasPreHumanas: 1,
+    });
   });
 });
 
@@ -241,10 +264,43 @@ describe('filtros', () => {
     expect(filtrarRelacoes([item], 'amizade')).toHaveLength(1);
   });
 
+  it('filtra consciências por natureza consciencial', () => {
+    const items = [
+      consciencia({ id: 'C-001', naturezaConsciencial: 'humana' }),
+      consciencia({ id: 'P-001', naturezaConsciencial: 'pre-humana' }),
+    ];
+    expect(filtrarConsciencias(items, '', 'humanas').map((item) => item.id)).toEqual(['C-001']);
+    expect(filtrarConsciencias(items, '', 'pre-humanas').map((item) => item.id)).toEqual(['P-001']);
+    expect(filtrarConsciencias(items, '', 'todas')).toHaveLength(2);
+  });
+
+  it('filtra retrovidas por natureza consciencial', () => {
+    const items = [
+      retrovida({ id: 'C-001_V01', naturezaConsciencial: 'humana' }),
+      retrovida({ id: 'P-001_V01', naturezaConsciencial: 'pre-humana' }),
+    ];
+    expect(filtrarRetrovidas(items, '', 'humanas').map((item) => item.id)).toEqual(['C-001_V01']);
+    expect(filtrarRetrovidas(items, '', 'pre-humanas').map((item) => item.id)).toEqual(['P-001_V01']);
+  });
+
   it('elimina itens que não correspondem', () => {
     expect(filtrarEventos([evento()], 'inexistente')).toHaveLength(0);
     expect(filtrarLugares([lugar()], 'inexistente')).toHaveLength(0);
     expect(filtrarRelacoes([relacao()], 'inexistente')).toHaveLength(0);
+  });
+});
+
+describe('diagnósticos', () => {
+  it('combina erros e avisos de indexação com níveis distintos', () => {
+    const value = index();
+    const diagnostics = construirDiagnosticos({
+      ...value,
+      avisosIndexacao: [{ filePath: 'aviso.md', mensagem: 'aviso legado', campo: 'tipo' }],
+    });
+    expect(diagnostics).toEqual([
+      { nivel: 'erro', filePath: 'x.md', mensagem: 'erro' },
+      { nivel: 'aviso', filePath: 'aviso.md', mensagem: 'aviso legado', campo: 'tipo' },
+    ]);
   });
 });
 

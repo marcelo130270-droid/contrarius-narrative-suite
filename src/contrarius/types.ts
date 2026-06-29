@@ -1,9 +1,17 @@
+export type NaturezaConsciencial = "humana" | "pre-humana";
+
 export type ContrariusTipoEntidade =
   | "consciencia"
   | "retrovida"
   | "evento"
   | "lugar"
   | "relacao";
+
+export interface IndexWarning {
+  filePath: string;
+  mensagem: string;
+  campo?: string;
+}
 
 export interface IndexError {
   filePath: string;
@@ -32,6 +40,7 @@ export interface Consciencia extends ContrariusBase {
   holopensenes: readonly string[];
   grupocarma: readonly string[];
   reaparece: boolean;
+  naturezaConsciencial: NaturezaConsciencial;
 }
 
 export interface Retrovida extends ContrariusBase {
@@ -51,6 +60,7 @@ export interface Retrovida extends ContrariusBase {
   holopensenes: readonly string[];
   religiao: readonly string[];
   classeSocial: readonly string[];
+  naturezaConsciencial: NaturezaConsciencial;
 }
 
 export interface Evento extends ContrariusBase {
@@ -150,5 +160,6 @@ export interface ContrariusIndex {
   eventos: readonly Evento[];
   lugares: readonly Lugar[];
   relacoes: readonly Relacao[];
+  avisosIndexacao: readonly IndexWarning[];
   erros: readonly IndexError[];
 }

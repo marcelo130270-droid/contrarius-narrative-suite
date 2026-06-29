@@ -12,13 +12,13 @@ import type {
   Consciencia,
   ContrariusIndex,
   Evento,
-  IndexError,
   Lugar,
   Relacao,
   Retrovida,
 } from './types';
 import {
   agruparRetrovidasPorConsciencia,
+  construirDiagnosticos,
   construirResumo,
   filtrarConsciencias,
   filtrarEventos,
@@ -31,6 +31,8 @@ import {
   nomeRelacao,
   nomeRetrovida,
   type ContrariusDashboardTab,
+  type ContrariusDiagnostico,
+  type FiltroNaturezaConsciencial,
 } from './dashboard-model';
 
 export const VIEW_TYPE_CONTRARIUS_DASHBOARD = 'contrarius-knowledge-dashboard';
@@ -63,6 +65,7 @@ export class ContrariusDashboardView extends ItemView {
   private currentIndex: ContrariusIndex | null = null;
   private activeTab: ContrariusDashboardTab = 'resumo';
   private query = '';
+  private naturezaFilter: FiltroNaturezaConsciencial = 'todas';
   private loading = false;
   private lastIndexedAt: Date | null = null;
   private refreshTimer: number | null = null;
@@ -200,7 +203,7 @@ export class ContrariusDashboardView extends ItemView {
       case 'eventos': this.renderEventos(this.dashboardContentEl, this.currentIndex); break;
       case 'lugares': this.renderLugares(this.dashboardContentEl, this.currentIndex); break;
       case 'relacoes': this.renderRelacoes(this.dashboardContentEl, this.currentIndex); break;
-      case 'erros': this.renderErros(this.dashboardContentEl, this.currentIndex.erros); break;
+      case 'erros': this.renderDiagnosticos(this.dashboardContentEl, this.currentIndex); break;
     }
   }
 
@@ -306,16 +309,16 @@ export class ContrariusDashboardView extends ItemView {
       gap: '10px',
     });
 
-    const cards: ReadonlyArray<[string, number, ContrariusDashboardTab]> = [
-      ['Consciências', resumo.consciencias, 'consciencias'],
-      ['Retrovidas', resumo.retrovidas, 'retrovidas'],
+    const cards: ReadonlyArray<[string, number, ContrariusDashboardTab, string?]> = [
+      ['Consciências', resumo.consciencias, 'consciencias', `${resumo.conscienciasPreHumanas} pré-humanas`],
+      ['Retrovidas', resumo.retrovidas, 'retrovidas', `${resumo.retrovidasPreHumanas} pré-humanas`],
       ['Eventos', resumo.eventos, 'eventos'],
       ['Lugares', resumo.lugares, 'lugares'],
       ['Relações', resumo.relacoes, 'relacoes'],
-      ['Erros', resumo.erros, 'erros'],
+      ['Diagnósticos', resumo.erros + resumo.avisosIndexacao, 'erros'],
     ];
 
-    for (const [label, value, tab] of cards) {
+    for (const [label, value, tab, detail] of cards) {
       const card = grid.createEl('button');
       applyStyles(card, {
         display: 'flex',
@@ -330,6 +333,10 @@ export class ContrariusDashboardView extends ItemView {
       applyStyles(number, { fontSize: '1.65em', lineHeight: '1.1' });
       const text = card.createSpan({ text: label });
       applyStyles(text, { color: 'var(--text-muted)', marginTop: '4px' });
+      if (detail !== undefined) {
+        const subtext = card.createSpan({ text: detail });
+        applyStyles(subtext, { color: 'var(--text-faint)', marginTop: '2px', fontSize: '0.78em' });
+      }
       card.onclick = () => {
         this.activeTab = tab;
         this.render();
@@ -345,12 +352,13 @@ export class ContrariusDashboardView extends ItemView {
       color: 'var(--text-muted)',
     });
     note.setText(
-      `${resumo.totalEntidades} entidades indexadas. ${resumo.avisos} avisos internos e ${resumo.erros} erros de indexação. Nenhum arquivo é modificado por esta tela.`,
+      `${resumo.totalEntidades} entidades indexadas. ${resumo.avisosInternos} avisos internos, ${resumo.avisosIndexacao} avisos de indexação e ${resumo.erros} erros. Nenhum arquivo é modificado por esta tela.`,
     );
   }
 
   private renderConsciencias(container: HTMLElement, index: ContrariusIndex): void {
-    const items = filtrarConsciencias(index.consciencias, this.query);
+    this.renderNaturezaFilter(container);
+    const items = filtrarConsciencias(index.consciencias, this.query, this.naturezaFilter);
     const grouped = agruparRetrovidasPorConsciencia(index.retrovidas);
     this.renderSectionTitle(container, 'Consciências', items.length);
     if (items.length === 0) return this.renderEmpty(container);
@@ -362,7 +370,7 @@ export class ContrariusDashboardView extends ItemView {
       const summary = details.createEl('summary');
       applyStyles(summary, { cursor: 'pointer', fontWeight: '600' });
       const lives = grouped.get(item.id) ?? [];
-      summary.setText(`${nomeConsciencia(item)} · ${item.id} · ${lives.length} retrovida(s)`);
+      summary.setText(`${nomeConsciencia(item)} · ${item.id} · ${lives.length} retrovida(s)${item.naturezaConsciencial === 'pre-humana' ? ' · Pré-humana' : ''}`);
 
       const body = details.createDiv();
       applyStyles(body, { paddingTop: '10px' });
@@ -380,7 +388,7 @@ export class ContrariusDashboardView extends ItemView {
           this.renderCompactRow(
             body,
             nomeRetrovida(life),
-            `${life.vida || 'vida não informada'} · ${formatYear(life.nascimento)}–${formatYear(life.morte)}`,
+            `${life.naturezaConsciencial === 'pre-humana' ? 'Pré-humana · ' : ''}${life.vida || 'vida não informada'} · ${formatYear(life.nascimento)}–${formatYear(life.morte)}`,
             life.filePath,
           );
         }
@@ -389,7 +397,8 @@ export class ContrariusDashboardView extends ItemView {
   }
 
   private renderRetrovidas(container: HTMLElement, index: ContrariusIndex): void {
-    const items = filtrarRetrovidas(index.retrovidas, this.query);
+    this.renderNaturezaFilter(container);
+    const items = filtrarRetrovidas(index.retrovidas, this.query, this.naturezaFilter);
     this.renderSectionTitle(container, 'Retrovidas', items.length);
     if (items.length === 0) return this.renderEmpty(container);
     const sorted = [...items].sort((a, b) => {
@@ -405,7 +414,7 @@ export class ContrariusDashboardView extends ItemView {
         ['Período', joinValues(item.periodo)],
         ['Nascimento / morte', `${formatYear(item.nascimento)} / ${formatYear(item.morte)}`],
         ['Livro', joinValues(item.livro)],
-      ]);
+      ], item.naturezaConsciencial === 'pre-humana' ? 'Pré-humana' : undefined);
     }
   }
 
@@ -462,24 +471,66 @@ export class ContrariusDashboardView extends ItemView {
     }
   }
 
-  private renderErros(container: HTMLElement, errors: readonly IndexError[]): void {
-    this.renderSectionTitle(container, 'Diagnóstico', errors.length);
-    if (errors.length === 0) {
-      const ok = container.createDiv({ text: 'Nenhum erro de indexação encontrado.' });
+  private renderDiagnosticos(container: HTMLElement, index: ContrariusIndex): void {
+    const diagnostics = construirDiagnosticos(index);
+    this.renderSectionTitle(container, 'Diagnóstico', diagnostics.length);
+    if (diagnostics.length === 0) {
+      const ok = container.createDiv({ text: 'Nenhum erro ou aviso de indexação encontrado.' });
       applyStyles(ok, { color: 'var(--text-success)', padding: '12px 0' });
       return;
     }
-    for (const error of errors) {
-      const card = container.createDiv();
-      applyStyles(card, {
-        ...this.cardStyles(),
-        borderLeft: '3px solid var(--text-error)',
+    for (const diagnostic of diagnostics) {
+      this.renderDiagnosticCard(container, diagnostic);
+    }
+  }
+
+  private renderDiagnosticCard(container: HTMLElement, diagnostic: ContrariusDiagnostico): void {
+    const isError = diagnostic.nivel === 'erro';
+    const card = container.createDiv();
+    applyStyles(card, {
+      ...this.cardStyles(),
+      borderLeft: `3px solid ${isError ? 'var(--text-error)' : 'var(--text-warning)'}`,
+    });
+    const level = card.createDiv({ text: isError ? 'Erro' : 'Aviso' });
+    applyStyles(level, {
+      color: isError ? 'var(--text-error)' : 'var(--text-warning)',
+      fontSize: '0.78em',
+      fontWeight: '600',
+      textTransform: 'uppercase',
+      marginBottom: '4px',
+    });
+    const message = card.createEl('strong', { text: diagnostic.mensagem });
+    applyStyles(message, { display: 'block' });
+    const path = card.createDiv({ text: diagnostic.filePath || 'Sem caminho associado' });
+    applyStyles(path, { color: 'var(--text-muted)', marginTop: '4px', fontSize: '0.9em' });
+    if (diagnostic.filePath) this.renderOpenButton(card, diagnostic.filePath);
+  }
+
+  private renderNaturezaFilter(container: HTMLElement): void {
+    const group = container.createDiv();
+    applyStyles(group, {
+      display: 'flex',
+      gap: '6px',
+      flexWrap: 'wrap',
+      marginBottom: '14px',
+    });
+    const options: ReadonlyArray<[FiltroNaturezaConsciencial, string]> = [
+      ['todas', 'Todas'],
+      ['humanas', 'Humanas'],
+      ['pre-humanas', 'Pré-humanas'],
+    ];
+    for (const [value, label] of options) {
+      const button = group.createEl('button', { text: label });
+      const active = this.naturezaFilter === value;
+      button.setAttr('aria-pressed', String(active));
+      applyStyles(button, {
+        background: active ? 'var(--interactive-accent)' : '',
+        color: active ? 'var(--text-on-accent)' : '',
       });
-      const message = card.createEl('strong', { text: error.mensagem });
-      applyStyles(message, { display: 'block' });
-      const path = card.createDiv({ text: error.filePath || 'Sem caminho associado' });
-      applyStyles(path, { color: 'var(--text-muted)', marginTop: '4px', fontSize: '0.9em' });
-      if (error.filePath) this.renderOpenButton(card, error.filePath);
+      button.onclick = () => {
+        this.naturezaFilter = value;
+        this.render();
+      };
     }
   }
 
@@ -510,17 +561,35 @@ export class ContrariusDashboardView extends ItemView {
     id: string,
     filePath: string,
     metadata: ReadonlyArray<readonly [string, string]>,
+    badge?: string,
   ): void {
     const card = container.createDiv();
     applyStyles(card, this.cardStyles());
-    const heading = card.createEl('h4', { text: title });
+    const titleRow = card.createDiv();
+    applyStyles(titleRow, { display: 'flex', alignItems: 'center', gap: '7px', flexWrap: 'wrap' });
+    const heading = titleRow.createEl('h4', { text: title });
     applyStyles(heading, { margin: '0 0 3px' });
+    if (badge !== undefined) this.renderBadge(titleRow, badge);
     const identifier = card.createDiv({ text: id });
     applyStyles(identifier, { color: 'var(--text-muted)', fontSize: '0.85em', marginBottom: '9px' });
     this.renderMetadata(card, metadata);
     this.renderOpenButton(card, filePath);
   }
 
+
+  private renderBadge(container: HTMLElement, label: string): void {
+    const badge = container.createSpan({ text: label });
+    applyStyles(badge, {
+      display: 'inline-flex',
+      alignItems: 'center',
+      padding: '2px 7px',
+      borderRadius: '999px',
+      background: 'var(--background-modifier-success)',
+      color: 'var(--text-normal)',
+      fontSize: '0.72em',
+      fontWeight: '600',
+    });
+  }
   private renderMetadata(
     container: HTMLElement,
     metadata: ReadonlyArray<readonly [string, string]>,
