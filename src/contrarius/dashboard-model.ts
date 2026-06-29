@@ -1,6 +1,7 @@
 import type {
   Consciencia,
   ContrariusIndex,
+  ContrariusTipoEntidade,
   Evento,
   IndexError,
   IndexWarning,
@@ -21,6 +22,9 @@ export type ContrariusDashboardTab =
 
 export type FiltroNaturezaConsciencial = 'todas' | 'humanas' | 'pre-humanas';
 
+export type CategoriaDiagnostico = 'erro' | 'indexacao' | 'interno';
+export type FiltroDiagnostico = 'todos' | CategoriaDiagnostico;
+
 export interface ContrariusDashboardResumo {
   consciencias: number;
   conscienciasPreHumanas: number;
@@ -37,10 +41,21 @@ export interface ContrariusDashboardResumo {
 }
 
 export interface ContrariusDiagnostico {
+  categoria: CategoriaDiagnostico;
   nivel: 'aviso' | 'erro';
   filePath: string;
   mensagem: string;
   campo?: string;
+  tipoEntidade?: ContrariusTipoEntidade;
+}
+
+export interface GrupoDiagnostico {
+  categoria: CategoriaDiagnostico;
+  nivel: 'aviso' | 'erro';
+  mensagem: string;
+  tipoEntidade?: ContrariusTipoEntidade;
+  itens: readonly ContrariusDiagnostico[];
+  quantidade: number;
 }
 
 function contarAvisos<T extends { avisos: readonly string[] }>(items: readonly T[]): number {
@@ -85,48 +100,111 @@ export function construirResumo(index: ContrariusIndex): ContrariusDashboardResu
 }
 
 function diagnosticFromWarning(warning: IndexWarning): ContrariusDiagnostico {
-  return { nivel: 'aviso', ...warning };
+  return { categoria: 'indexacao', nivel: 'aviso', ...warning };
 }
 
 function diagnosticFromError(error: IndexError): ContrariusDiagnostico {
-  return { nivel: 'erro', ...error };
+  return { categoria: 'erro', nivel: 'erro', ...error };
 }
 
+type EntityWithAvisos = { filePath: string; avisos: readonly string[] };
+
 export function construirDiagnosticos(index: ContrariusIndex): readonly ContrariusDiagnostico[] {
+  const internos: ContrariusDiagnostico[] = [];
+  const grupos: ReadonlyArray<readonly [ContrariusTipoEntidade, readonly EntityWithAvisos[]]> = [
+    ['consciencia', index.consciencias],
+    ['retrovida', index.retrovidas],
+    ['evento', index.eventos],
+    ['lugar', index.lugares],
+    ['relacao', index.relacoes],
+  ];
+  for (const [tipoEntidade, entities] of grupos) {
+    for (const entity of entities) {
+      for (const mensagem of entity.avisos) {
+        internos.push({ categoria: 'interno', nivel: 'aviso', filePath: entity.filePath, mensagem, tipoEntidade });
+      }
+    }
+  }
   return [
     ...index.erros.map(diagnosticFromError),
     ...index.avisosIndexacao.map(diagnosticFromWarning),
+    ...internos,
   ];
 }
 
-export function agruparRetrovidasPorConsciencia(
-  retrovidas: readonly Retrovida[],
-): ReadonlyMap<string, readonly Retrovida[]> {
-  const grouped = new Map<string, Retrovida[]>();
-  for (const retrovida of retrovidas) {
-    const key = retrovida.conscId.trim();
-    if (key === '') continue;
-    const current = grouped.get(key) ?? [];
-    current.push(retrovida);
-    grouped.set(key, current);
+const CATEGORIA_ORDER: Readonly<Record<CategoriaDiagnostico, number>> = { erro: 0, indexacao: 1, interno: 2 };
+
+export function agruparDiagnosticos(
+  diagnostics: readonly ContrariusDiagnostico[],
+): readonly GrupoDiagnostico[] {
+  const map = new Map<string, ContrariusDiagnostico[]>();
+  for (const d of diagnostics) {
+    const key = `${d.categoria}\0${d.mensagem}\0${d.tipoEntidade ?? ''}`;
+    const existing = map.get(key);
+    if (existing !== undefined) {
+      existing.push(d);
+    } else {
+      map.set(key, [d]);
+    }
   }
-  for (const items of grouped.values()) {
-    items.sort((a, b) => {
-      if (a.nascimento !== null && b.nascimento !== null && a.nascimento !== b.nascimento) {
-        return a.nascimento - b.nascimento;
-      }
-      return a.id.localeCompare(b.id, 'pt-BR');
+  const groups: GrupoDiagnostico[] = [];
+  for (const itens of map.values()) {
+    const first = itens[0];
+    groups.push({
+      categoria: first.categoria,
+      nivel: first.nivel,
+      mensagem: first.mensagem,
+      tipoEntidade: first.tipoEntidade,
+      itens,
+      quantidade: itens.length,
     });
   }
-  return grouped;
+  groups.sort((a, b) => {
+    const catDiff = CATEGORIA_ORDER[a.categoria] - CATEGORIA_ORDER[b.categoria];
+    if (catDiff !== 0) return catDiff;
+    const qDiff = b.quantidade - a.quantidade;
+    if (qDiff !== 0) return qDiff;
+    return a.mensagem.localeCompare(b.mensagem, 'pt-BR');
+  });
+  return groups;
+}
+
+export function contarDiagnosticosPorCategoria(
+  diagnostics: readonly ContrariusDiagnostico[],
+): Readonly<Record<CategoriaDiagnostico | 'todos', number>> {
+  let erro = 0;
+  let indexacao = 0;
+  let interno = 0;
+  for (const d of diagnostics) {
+    if (d.categoria === 'erro') erro++;
+    else if (d.categoria === 'indexacao') indexacao++;
+    else interno++;
+  }
+  return { erro, indexacao, interno, todos: erro + indexacao + interno };
 }
 
 function normalizeSearchText(value: string): string {
   return value
     .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[̀-ͯ]/g, '')
     .toLocaleLowerCase('pt-BR')
     .trim();
+}
+
+export function filtrarGruposDiagnostico(
+  groups: readonly GrupoDiagnostico[],
+  filter: FiltroDiagnostico,
+  query: string,
+): readonly GrupoDiagnostico[] {
+  const q = normalizeSearchText(query);
+  if (filter === 'todos' && q === '') return groups;
+  return groups.filter((group) => {
+    if (filter !== 'todos' && group.categoria !== filter) return false;
+    if (q === '') return true;
+    if (normalizeSearchText(group.mensagem).includes(q)) return true;
+    if (group.tipoEntidade !== undefined && normalizeSearchText(group.tipoEntidade).includes(q)) return true;
+    return group.itens.some((item) => normalizeSearchText(item.filePath).includes(q));
+  });
 }
 
 function includesQuery(values: readonly string[], query: string): boolean {
@@ -265,4 +343,26 @@ export function nomeRelacao(item: Relacao): string {
   const tipo = item.tipoRelacao.find((value) => value.trim() !== '') ?? 'Relação';
   const extremos = [item.consciencia1, item.consciencia2].filter((value) => value.trim() !== '');
   return extremos.length > 0 ? `${tipo}: ${extremos.join(' ↔ ')}` : item.id;
+}
+
+export function agruparRetrovidasPorConsciencia(
+  retrovidas: readonly Retrovida[],
+): ReadonlyMap<string, readonly Retrovida[]> {
+  const grouped = new Map<string, Retrovida[]>();
+  for (const retrovida of retrovidas) {
+    const key = retrovida.conscId.trim();
+    if (key === '') continue;
+    const current = grouped.get(key) ?? [];
+    current.push(retrovida);
+    grouped.set(key, current);
+  }
+  for (const items of grouped.values()) {
+    items.sort((a, b) => {
+      if (a.nascimento !== null && b.nascimento !== null && a.nascimento !== b.nascimento) {
+        return a.nascimento - b.nascimento;
+      }
+      return a.id.localeCompare(b.id, 'pt-BR');
+    });
+  }
+  return grouped;
 }

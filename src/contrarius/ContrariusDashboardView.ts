@@ -18,11 +18,14 @@ import type {
   Retrovida,
 } from './types';
 import {
+  agruparDiagnosticos,
   agruparRetrovidasPorConsciencia,
   construirDiagnosticos,
   construirResumo,
+  contarDiagnosticosPorCategoria,
   filtrarConsciencias,
   filtrarEventos,
+  filtrarGruposDiagnostico,
   filtrarLugares,
   filtrarRelacoes,
   filtrarRetrovidas,
@@ -32,8 +35,9 @@ import {
   nomeRelacao,
   nomeRetrovida,
   type ContrariusDashboardTab,
-  type ContrariusDiagnostico,
+  type FiltroDiagnostico,
   type FiltroNaturezaConsciencial,
+  type GrupoDiagnostico,
 } from './dashboard-model';
 
 export const VIEW_TYPE_CONTRARIUS_DASHBOARD = 'contrarius-knowledge-dashboard';
@@ -80,6 +84,7 @@ export class ContrariusDashboardView extends ItemView {
   private activeTab: ContrariusDashboardTab = 'resumo';
   private query = '';
   private naturezaFilter: FiltroNaturezaConsciencial = 'todas';
+  private diagnosticFilter: FiltroDiagnostico = 'todos';
   private loading = false;
   private lastIndexedAt: Date | null = null;
   private refreshTimer: number | null = null;
@@ -329,7 +334,7 @@ export class ContrariusDashboardView extends ItemView {
       ['Eventos', resumo.eventos, 'eventos'],
       ['Lugares', resumo.lugares, 'lugares'],
       ['Relações', resumo.relacoes, 'relacoes'],
-      ['Diagnósticos', resumo.erros + resumo.avisosIndexacao, 'erros'],
+      ['Diagnósticos', resumo.erros + resumo.avisosIndexacao + resumo.avisosInternos, 'erros'],
     ];
 
     for (const [label, value, tab, detail] of cards) {
@@ -494,38 +499,111 @@ export class ContrariusDashboardView extends ItemView {
   }
 
   private renderDiagnosticos(container: HTMLElement, index: ContrariusIndex): void {
-    const diagnostics = construirDiagnosticos(index);
-    this.renderSectionTitle(container, 'Diagnóstico', diagnostics.length);
-    if (diagnostics.length === 0) {
-      const ok = container.createDiv({ text: 'Nenhum erro ou aviso de indexação encontrado.' });
-      applyStyles(ok, { color: 'var(--text-success)', padding: '12px 0' });
+    const allDiagnostics = construirDiagnosticos(index);
+    const allGroups = agruparDiagnosticos(allDiagnostics);
+    const counts = contarDiagnosticosPorCategoria(allDiagnostics);
+    const filteredGroups = filtrarGruposDiagnostico(allGroups, this.diagnosticFilter, this.query);
+    const totalOcorrencias = filteredGroups.reduce((sum, g) => sum + g.quantidade, 0);
+
+    this.renderDiagnosticFilterBar(container, counts);
+
+    const heading = container.createEl('h3');
+    heading.setText(
+      `Diagnóstico — ${totalOcorrencias} ocorrência${totalOcorrencias !== 1 ? 's' : ''} em ${filteredGroups.length} grupo${filteredGroups.length !== 1 ? 's' : ''}`,
+    );
+    applyStyles(heading, { marginTop: '0' });
+
+    if (filteredGroups.length === 0) {
+      const msg = allDiagnostics.length === 0
+        ? 'Nenhum erro ou aviso encontrado.'
+        : 'Nenhum resultado para o filtro atual.';
+      const empty = container.createDiv({ text: msg });
+      applyStyles(empty, { color: 'var(--text-muted)', padding: '12px 0' });
       return;
     }
-    for (const diagnostic of diagnostics) {
-      this.renderDiagnosticCard(container, diagnostic);
+
+    for (const group of filteredGroups) {
+      this.renderGrupoDiagnostico(container, group);
     }
   }
 
-  private renderDiagnosticCard(container: HTMLElement, diagnostic: ContrariusDiagnostico): void {
-    const isError = diagnostic.nivel === 'erro';
-    const card = container.createDiv();
-    applyStyles(card, {
-      ...this.cardStyles(),
-      borderLeft: `3px solid ${isError ? 'var(--text-error)' : 'var(--text-warning)'}`,
+  private renderDiagnosticFilterBar(
+    container: HTMLElement,
+    counts: Readonly<Record<FiltroDiagnostico, number>>,
+  ): void {
+    const group = container.createDiv();
+    applyStyles(group, {
+      display: 'flex',
+      gap: '6px',
+      flexWrap: 'wrap',
+      marginBottom: '14px',
     });
-    const level = card.createDiv({ text: isError ? 'Erro' : 'Aviso' });
-    applyStyles(level, {
-      color: isError ? 'var(--text-error)' : 'var(--text-warning)',
+    const options: ReadonlyArray<[FiltroDiagnostico, string]> = [
+      ['todos', `Todos (${counts.todos})`],
+      ['erro', `Erros (${counts.erro})`],
+      ['indexacao', `Indexação (${counts.indexacao})`],
+      ['interno', `Internos (${counts.interno})`],
+    ];
+    for (const [value, label] of options) {
+      const button = group.createEl('button', { text: label });
+      const active = this.diagnosticFilter === value;
+      button.setAttr('aria-pressed', String(active));
+      applyStyles(button, {
+        background: active ? 'var(--interactive-accent)' : '',
+        color: active ? 'var(--text-on-accent)' : '',
+      });
+      button.onclick = () => {
+        this.diagnosticFilter = value;
+        this.render();
+      };
+    }
+  }
+
+  private renderGrupoDiagnostico(container: HTMLElement, group: GrupoDiagnostico): void {
+    const color =
+      group.categoria === 'erro'
+        ? 'var(--text-error)'
+        : group.categoria === 'indexacao'
+          ? 'var(--text-warning)'
+          : 'var(--interactive-accent)';
+
+    const categoryLabel =
+      group.categoria === 'erro' ? 'Erro' : group.categoria === 'indexacao' ? 'Indexação' : 'Interno';
+
+    const details = container.createEl('details');
+    applyStyles(details, {
+      ...this.cardStyles(),
+      borderLeft: `3px solid ${color}`,
+    });
+
+    const summary = details.createEl('summary');
+    applyStyles(summary, { cursor: 'pointer' });
+
+    const levelSpan = summary.createSpan({ text: categoryLabel });
+    applyStyles(levelSpan, {
+      color,
       fontSize: '0.78em',
       fontWeight: '600',
       textTransform: 'uppercase',
-      marginBottom: '4px',
+      marginRight: '8px',
     });
-    const message = card.createEl('strong', { text: diagnostic.mensagem });
-    applyStyles(message, { display: 'block' });
-    const path = card.createDiv({ text: diagnostic.filePath || 'Sem caminho associado' });
-    applyStyles(path, { color: 'var(--text-muted)', marginTop: '4px', fontSize: '0.9em' });
-    if (diagnostic.filePath) this.renderOpenButton(card, diagnostic.filePath);
+
+    summary.appendText(group.mensagem);
+
+    if (group.tipoEntidade !== undefined) {
+      const typeSpan = summary.createSpan({ text: ` · ${group.tipoEntidade}` });
+      applyStyles(typeSpan, { color: 'var(--text-muted)', fontSize: '0.9em' });
+    }
+
+    const countSpan = summary.createSpan({ text: ` (${group.quantidade})` });
+    applyStyles(countSpan, { color: 'var(--text-muted)', fontSize: '0.9em' });
+
+    const body = details.createDiv();
+    applyStyles(body, { paddingTop: '8px' });
+
+    for (const item of group.itens) {
+      this.renderCompactRow(body, item.filePath, item.campo ?? '', item.filePath);
+    }
   }
 
   private renderNaturezaFilter(container: HTMLElement): void {
