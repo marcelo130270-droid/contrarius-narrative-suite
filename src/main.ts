@@ -54,6 +54,7 @@ import { MapView, VIEW_TYPE_MAP } from './views/MapView';
 import { WritingPanelView, VIEW_TYPE_WRITING_PANEL } from './views/WritingPanelView';
 import { CampaignView, VIEW_TYPE_CAMPAIGN } from './views/CampaignView';
 import { SceneGraphView, VIEW_TYPE_SCENE_GRAPH } from './views/SceneGraphView';
+import { ContrariusDashboardView, VIEW_TYPE_CONTRARIUS_DASHBOARD } from './contrarius/ContrariusDashboardView';
 import { StorytellerGuideModal } from './modals/StorytellerGuideModal';
 // DEPRECATED: Map functionality has been deprecated
 // import { MapEditorView, VIEW_TYPE_MAP_EDITOR } from './views/MapEditorView';
@@ -257,7 +258,7 @@ const FRONTMATTER_LINK_ONLY_SCALAR_FIELDS = new Set([
     customFieldsMode?: 'flatten' | 'nested';
     /** Internal: set after relationships migration to avoid repeating it */
     relationshipsMigrated?: boolean;
-    /** Internal: set after backfilling bidirectional links (v2.0). Legacy boolean — superseded by bidirectionalLinksBackfilledVersion */
+    /** Internal: set after backfilling bidirectional links (v2.0). Legacy boolean â€” superseded by bidirectionalLinksBackfilledVersion */
     bidirectionalLinksBackfilled?: boolean;
     /** Internal: last plugin version that ran the bidirectional link backfill */
     bidirectionalLinksBackfilledVersion?: string;
@@ -641,7 +642,7 @@ export default class StorytellerSuitePlugin extends Plugin {
     private frontmatterReferenceIndexCache: Map<string, Promise<FrontmatterReferenceIndex>> = new Map();
     private legacyModalLayoutObserver: MutationObserver | null = null;
 
-    /** Word count tracker — Longform-compatible goal tracking */
+    /** Word count tracker â€” Longform-compatible goal tracking */
     wordTracker: WordCountTracker;
 
     /** Status bar element showing live word count + daily goal */
@@ -1340,7 +1341,7 @@ export default class StorytellerSuitePlugin extends Plugin {
 
 	/**
 	 * Backfill bidirectional relationships for all entities
-	 * Ensures consistency of links (e.g. Item owner ↔ Character ownedItems)
+	 * Ensures consistency of links (e.g. Item owner â†” Character ownedItems)
 	 * Runs once on update to v2.0
 	 */
 	async backfillBidirectionalRelationships(): Promise<void> {
@@ -1533,6 +1534,30 @@ export default class StorytellerSuitePlugin extends Plugin {
 		// Register campaign play view and scene graph view
 		this.registerView(VIEW_TYPE_CAMPAIGN, (leaf) => new CampaignView(leaf, this));
 		this.registerView(VIEW_TYPE_SCENE_GRAPH, (leaf) => new SceneGraphView(leaf, this));
+        // Register the read-only Contrarius knowledge dashboard.
+        this.registerView(
+            VIEW_TYPE_CONTRARIUS_DASHBOARD,
+            (leaf) => new ContrariusDashboardView(leaf, this.app)
+        );
+
+        const openContrariusDashboard = async (): Promise<void> => {
+            const existingLeaf = this.app.workspace.getLeavesOfType(VIEW_TYPE_CONTRARIUS_DASHBOARD)[0];
+            const leaf = existingLeaf ?? this.app.workspace.getRightLeaf(false) ?? this.app.workspace.getLeaf(true);
+            if (existingLeaf === undefined) {
+                await leaf.setViewState({ type: VIEW_TYPE_CONTRARIUS_DASHBOARD, active: true });
+            }
+            this.app.workspace.revealLeaf(leaf);
+        };
+
+        this.addRibbonIcon('database', 'Abrir painel Contrarius', () => {
+            void openContrariusDashboard();
+        }).addClass('contrarius-dashboard-ribbon');
+
+        this.addCommand({
+            id: 'open-contrarius-dashboard',
+            name: 'Abrir painel de conhecimento Contrarius',
+            callback: () => { void openContrariusDashboard(); },
+        });
 
 		// DEPRECATED: Map functionality has been deprecated
 		// Register the map editor view for full-screen map editing
@@ -2025,12 +2050,12 @@ export default class StorytellerSuitePlugin extends Plugin {
 	 * Obsidian automatically handles view cleanup
 	 * Each cleanup operation is wrapped in try-catch to ensure all cleanups run
 	 */
-	// ─── Status Bar ─────────────────────────────────────────────────────────────
+	// â”€â”€â”€ Status Bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 	private initStatusBar(): void {
 		this.statusBarWordCountEl = this.addStatusBarItem();
 		this.statusBarWordCountEl.addClass('storyteller-wordcount-bar');
-		this.statusBarWordCountEl.title = 'Storyteller suite — click to open writing analytics';
+		this.statusBarWordCountEl.title = 'Storyteller suite â€” click to open writing analytics';
 		this.statusBarWordCountEl.setCssStyles({ cursor: 'pointer' });
 		this.statusBarWordCountEl.addEventListener('click', () => { void this.activateAnalyticsView(); });
 
@@ -2162,7 +2187,7 @@ export default class StorytellerSuitePlugin extends Plugin {
 			docSpan.setText(`${wordCount.toLocaleString()} words`);
 
 			if (goal > 0) {
-				this.statusBarWordCountEl.createSpan({ cls: 'storyteller-bar-sep', text: ' · ' });
+				this.statusBarWordCountEl.createSpan({ cls: 'storyteller-bar-sep', text: ' Â· ' });
 				const goalSpan = this.statusBarWordCountEl.createSpan({ cls: 'storyteller-bar-goal' });
 				const pct = Math.min(100, Math.round((todayWords / goal) * 100));
 				const scopeSuffix = countsForGoal ? '' : ' (not counted)';
@@ -2174,7 +2199,7 @@ export default class StorytellerSuitePlugin extends Plugin {
 		}
 	}
 
-	// ─── New-File Scene Prompt ────────────────────────────────────────────────
+	// â”€â”€â”€ New-File Scene Prompt â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 	private async promptAddAsScene(file: TFile): Promise<void> {
 		const activeDraftId = this.settings.activeDraftId;
@@ -2564,7 +2589,7 @@ export default class StorytellerSuitePlugin extends Plugin {
 				const warningCount = conflicts.filter(c => c.severity === 'warning').length;
 
 				if (conflicts.length === 0) {
-					new Notice('✓ no timeline conflicts detected');
+					new Notice('âœ“ no timeline conflicts detected');
 				} else {
 					new Notice(`Found ${errorCount} error(s), ${warningCount} warning(s)`);
 				}
@@ -3366,10 +3391,10 @@ export default class StorytellerSuitePlugin extends Plugin {
 				const draft = sceneManager.getActiveDraft(activeStory);
 				if (draft) {
 					const wordCount = await sceneManager.calculateDraftWordCount(draft);
-					new Notice(`📖 ${activeStory.name} - ${draft.name}\n${wordTracker.formatWordCount(wordCount)} words`);
+					new Notice(`ðŸ“– ${activeStory.name} - ${draft.name}\n${wordTracker.formatWordCount(wordCount)} words`);
 				} else {
 					const wordCount = await wordTracker.getStoryWordCount(activeStory);
-					new Notice(`📖 ${activeStory.name}\n${wordTracker.formatWordCount(wordCount)} words`);
+					new Notice(`ðŸ“– ${activeStory.name}\n${wordTracker.formatWordCount(wordCount)} words`);
 				}
 			}
 		});
@@ -3994,7 +4019,7 @@ export default class StorytellerSuitePlugin extends Plugin {
             // Do not carry forward a raw sections map on the entity; only mapped fields are kept
             if (data.sections) delete data.sections;
 
-            // Strip [[...]] wikilink brackets from linked entity arrays — stored with brackets
+            // Strip [[...]] wikilink brackets from linked entity arrays â€” stored with brackets
             // in YAML for Obsidian Graph/Properties support, but used internally as plain names
             await this.normalizeFrontmatterEntityReferences(data);
 
@@ -5365,12 +5390,12 @@ export default class StorytellerSuitePlugin extends Plugin {
 
 					if (errorCount > 0) {
 						new Notice(
-							`⚠️ Event saved with ${errorCount} conflict(s). Use "Detect timeline conflicts" to review.`,
+							`âš ï¸ Event saved with ${errorCount} conflict(s). Use "Detect timeline conflicts" to review.`,
 							5000
 						);
 					} else if (warningCount > 0) {
 						new Notice(
-							`⚠ Event saved with ${warningCount} warning(s)`,
+							`âš  Event saved with ${warningCount} warning(s)`,
 							3000
 						);
 					}
@@ -6009,7 +6034,7 @@ export default class StorytellerSuitePlugin extends Plugin {
         let scanPaths: string[];
 
         if (resolver.usesBookName('chapter')) {
-            // Scan one folder per book + the unassigned folder (empty bookName → normalizePath collapses double-slash)
+            // Scan one folder per book + the unassigned folder (empty bookName â†’ normalizePath collapses double-slash)
             const books = await this.listBooks();
             const seenFolders = new Set<string>();
             scanPaths = [];
@@ -6098,7 +6123,7 @@ export default class StorytellerSuitePlugin extends Plugin {
         await this.ensureFolder(this.getEntityFolder('book'));
     }
 
-    // ─── Scalar parent-ID sync helpers ───────────────────────────────────────
+    // â”€â”€â”€ Scalar parent-ID sync helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     /** Add sceneName to the linkedScenes array of the chapter with the given id. */
     private async _addSceneToChapter(sceneName: string, chapterId: string): Promise<void> {
@@ -6154,7 +6179,7 @@ export default class StorytellerSuitePlugin extends Plugin {
         }
     }
 
-    // ─── Book CRUD ────────────────────────────────────────────────────────────
+    // â”€â”€â”€ Book CRUD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private buildFrontmatterForBook(src: Record<string, unknown>, originalFrontmatter?: Record<string, unknown>): Promise<Record<string, unknown>> {
         return this.buildLinkedFrontmatter('book', src, originalFrontmatter);
@@ -6275,7 +6300,7 @@ export default class StorytellerSuitePlugin extends Plugin {
         }
     }
 
-    // ─── Campaign Session CRUD ───────────────────────────────────────────────
+    // â”€â”€â”€ Campaign Session CRUD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     async ensureSessionsFolder(): Promise<void> {
         await this.ensureFolder(this.getEntityFolder('campaignSession'));
@@ -6283,7 +6308,7 @@ export default class StorytellerSuitePlugin extends Plugin {
 
     /**
      * Save a CampaignSession as a markdown file (frontmatter + ## Session Log body).
-     * Preserves any existing ## Session Log content — only updates frontmatter.
+     * Preserves any existing ## Session Log content â€” only updates frontmatter.
      */
     async saveSession(session: CampaignSession): Promise<void> {
         await this.ensureSessionsFolder();
@@ -6397,7 +6422,7 @@ export default class StorytellerSuitePlugin extends Plugin {
         await this.appendToSessionLogEntries(filePath, [entry]);
     }
 
-    // ─── End Campaign Session CRUD ───────────────────────────────────────────
+    // â”€â”€â”€ End Campaign Session CRUD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     async saveScene(scene: Scene): Promise<void> {
         // Resolve chapter info (name + bookName) for folder placement and display
@@ -7535,7 +7560,7 @@ export default class StorytellerSuitePlugin extends Plugin {
         this.settings.causalityLinks.push(link);
         void this.saveSettings();
 
-        new Notice(`Causality link created: ${causeEvent} → ${effectEvent}`);
+        new Notice(`Causality link created: ${causeEvent} â†’ ${effectEvent}`);
         return link;
     }
 
@@ -8272,7 +8297,7 @@ export default class StorytellerSuitePlugin extends Plugin {
 		this.emitGroupsChanged();
 	}
 
-	// ─── Group Vault File Helpers ──────────────────────────────────────────
+	// â”€â”€â”€ Group Vault File Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 	/**
 	 * Build the safe filename for a group's vault note.
