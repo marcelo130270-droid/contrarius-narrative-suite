@@ -30,6 +30,46 @@ function mensagemErro(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+const UTF8_BOM = '\uFEFF';
+
+type FrontmatterNulo = 'incompleto' | 'invalido';
+
+function classificarFrontmatterNulo(content: string): FrontmatterNulo {
+  const withoutBom = content.startsWith(UTF8_BOM) ? content.slice(1) : content;
+  const normalized = withoutBom.replace(/\r\n/g, '\n');
+  const firstNewline = normalized.indexOf('\n');
+  const firstLine = firstNewline === -1 ? normalized : normalized.slice(0, firstNewline);
+
+  // A nota não declara frontmatter: pode ser indexada provisoriamente pela pasta e pelo basename.
+  if (firstLine !== '---') return 'incompleto';
+  if (firstNewline === -1) return 'invalido';
+
+  const lines = normalized.slice(firstNewline + 1).split('\n');
+  const closingIndex = lines.findIndex((line) => line === '---');
+  if (closingIndex === -1) return 'invalido';
+
+  const yamlBlock = lines.slice(0, closingIndex).join('\n');
+  return yamlBlock.trim() === '' ? 'incompleto' : 'invalido';
+}
+
+async function podeIndexarComoIncompleta(file: TFile, deps: ReaderDeps): Promise<boolean> {
+  try {
+    return classificarFrontmatterNulo(await deps.cachedRead(file)) === 'incompleto';
+  } catch {
+    return false;
+  }
+}
+
+function rotuloTipo(tipo: ContrariusTipoEntidade): string {
+  switch (tipo) {
+    case 'consciencia': return 'Consciência';
+    case 'retrovida': return 'Retrovida';
+    case 'evento': return 'Evento';
+    case 'lugar': return 'Lugar';
+    case 'relacao': return 'Relação';
+  }
+}
+
 function registrarDuplicados<T extends { id: string; filePath: string }>(
   items: readonly T[],
   tipo: ContrariusTipoEntidade,
@@ -86,10 +126,29 @@ export async function indexarContrarius(
       continue;
     }
     if (frontmatter === null) {
-      if (tipoPasta !== null) {
-        erros.push({ filePath: file.path, mensagem: 'Frontmatter ausente, vazio, inválido ou ilegível.' });
+      if (tipoPasta === null) continue;
+
+      if (await podeIndexarComoIncompleta(file, deps)) {
+        frontmatter = {};
+        avisosIndexacao.push({
+          filePath: file.path,
+          campo: 'frontmatter',
+          mensagem: `Nota sem frontmatter; indexada provisoriamente como entidade incompleta do tipo ${rotuloTipo(tipoPasta)} usando o nome do arquivo.`,
+        });
+      } else {
+        erros.push({
+          filePath: file.path,
+          campo: 'frontmatter',
+          mensagem: 'Frontmatter inválido ou ilegível; a nota não foi indexada.',
+        });
+        continue;
       }
-      continue;
+    } else if (tipoPasta !== null && Object.keys(frontmatter).length === 0) {
+      avisosIndexacao.push({
+        filePath: file.path,
+        campo: 'frontmatter',
+        mensagem: `Frontmatter vazio; indexada provisoriamente como entidade incompleta do tipo ${rotuloTipo(tipoPasta)} usando o nome do arquivo.`,
+      });
     }
 
     const identificacao = identificarTipoEntidade(file.path, frontmatter, pastas);
