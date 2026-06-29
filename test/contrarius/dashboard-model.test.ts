@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+  agruparDiagnosticos,
   agruparRetrovidasPorConsciencia,
   construirDiagnosticos,
   construirResumo,
+  contarDiagnosticosPorCategoria,
   filtrarConsciencias,
   filtrarEventos,
+  filtrarGruposDiagnostico,
   filtrarLugares,
   filtrarRelacoes,
   filtrarRetrovidas,
@@ -13,6 +16,8 @@ import {
   nomeLugar,
   nomeRelacao,
   nomeRetrovida,
+  type ContrariusDiagnostico,
+  type GrupoDiagnostico,
 } from '../../src/contrarius/dashboard-model';
 import type {
   Consciencia,
@@ -165,6 +170,29 @@ function index(): ContrariusIndex {
   };
 }
 
+function emptyIndex(): ContrariusIndex {
+  return {
+    consciencias: [],
+    retrovidas: [],
+    eventos: [],
+    lugares: [],
+    relacoes: [],
+    avisosIndexacao: [],
+    erros: [],
+  };
+}
+
+function makeGroup(overrides: Partial<GrupoDiagnostico> = {}): GrupoDiagnostico {
+  return {
+    categoria: 'interno',
+    nivel: 'aviso',
+    mensagem: 'mensagem padrao',
+    itens: [{ categoria: 'interno', nivel: 'aviso', filePath: 'nota.md', mensagem: 'mensagem padrao', tipoEntidade: 'evento' }],
+    quantidade: 1,
+    ...overrides,
+  };
+}
+
 describe('construirResumo', () => {
   it('conta todas as entidades', () => {
     expect(construirResumo(index())).toMatchObject({
@@ -292,14 +320,14 @@ describe('filtros', () => {
 
 describe('diagnósticos', () => {
   it('combina erros e avisos de indexação com níveis distintos', () => {
-    const value = index();
     const diagnostics = construirDiagnosticos({
-      ...value,
+      ...emptyIndex(),
       avisosIndexacao: [{ filePath: 'aviso.md', mensagem: 'aviso legado', campo: 'tipo' }],
+      erros: [{ filePath: 'x.md', mensagem: 'erro' }],
     });
     expect(diagnostics).toEqual([
-      { nivel: 'erro', filePath: 'x.md', mensagem: 'erro' },
-      { nivel: 'aviso', filePath: 'aviso.md', mensagem: 'aviso legado', campo: 'tipo' },
+      { categoria: 'erro', nivel: 'erro', filePath: 'x.md', mensagem: 'erro' },
+      { categoria: 'indexacao', nivel: 'aviso', filePath: 'aviso.md', mensagem: 'aviso legado', campo: 'tipo' },
     ]);
   });
 });
@@ -330,5 +358,317 @@ describe('nomes de exibição', () => {
   it('forma nome legível para relação', () => {
     expect(nomeRelacao(relacao())).toBe('Amizade: C-001 ↔ C-002');
     expect(nomeRelacao(relacao({ tipoRelacao: [], consciencia1: '', consciencia2: '' }))).toBe('R-001');
+  });
+});
+
+// ─── Novos testes: construirDiagnosticos — categorias ────────────────────────
+
+describe('construirDiagnosticos — categorias e entidades', () => {
+  it('erros recebem categoria erro e nível erro', () => {
+    const d = construirDiagnosticos({
+      ...emptyIndex(),
+      erros: [{ filePath: 'falha.md', mensagem: 'falha grave' }],
+    });
+    expect(d).toHaveLength(1);
+    expect(d[0]).toMatchObject({ categoria: 'erro', nivel: 'erro' });
+  });
+
+  it('avisos de indexação recebem categoria indexacao e nível aviso', () => {
+    const d = construirDiagnosticos({
+      ...emptyIndex(),
+      avisosIndexacao: [{ filePath: 'y.md', mensagem: 'campo faltando' }],
+    });
+    expect(d).toHaveLength(1);
+    expect(d[0]).toMatchObject({ categoria: 'indexacao', nivel: 'aviso' });
+  });
+
+  it('avisos internos de consciência são incluídos', () => {
+    const d = construirDiagnosticos({
+      ...emptyIndex(),
+      consciencias: [consciencia({ avisos: ['aviso alfa'] })],
+    });
+    expect(d.some((x) => x.categoria === 'interno' && x.tipoEntidade === 'consciencia')).toBe(true);
+  });
+
+  it('avisos internos de retrovida são incluídos', () => {
+    const d = construirDiagnosticos({
+      ...emptyIndex(),
+      retrovidas: [retrovida({ avisos: ['aviso beta'] })],
+    });
+    expect(d.some((x) => x.categoria === 'interno' && x.tipoEntidade === 'retrovida')).toBe(true);
+  });
+
+  it('avisos internos de evento são incluídos', () => {
+    const d = construirDiagnosticos({
+      ...emptyIndex(),
+      eventos: [evento({ avisos: ['aviso gama'] })],
+    });
+    expect(d.some((x) => x.categoria === 'interno' && x.tipoEntidade === 'evento')).toBe(true);
+  });
+
+  it('avisos internos de lugar são incluídos', () => {
+    const d = construirDiagnosticos({
+      ...emptyIndex(),
+      lugares: [lugar({ avisos: ['aviso delta'] })],
+    });
+    expect(d.some((x) => x.categoria === 'interno' && x.tipoEntidade === 'lugar')).toBe(true);
+  });
+
+  it('avisos internos de relação são incluídos', () => {
+    const d = construirDiagnosticos({
+      ...emptyIndex(),
+      relacoes: [relacao({ avisos: ['aviso epsilon'] })],
+    });
+    expect(d.some((x) => x.categoria === 'interno' && x.tipoEntidade === 'relacao')).toBe(true);
+  });
+
+  it('aviso interno preserva caminho e tipo da entidade', () => {
+    const d = construirDiagnosticos({
+      ...emptyIndex(),
+      consciencias: [consciencia({ filePath: 'caminho/nota.md', avisos: ['texto do aviso'] })],
+    });
+    const interno = d.find((x) => x.categoria === 'interno');
+    expect(interno).toMatchObject({ filePath: 'caminho/nota.md', tipoEntidade: 'consciencia', mensagem: 'texto do aviso' });
+  });
+
+  it('mais de um aviso na mesma entidade gera ocorrências separadas', () => {
+    const d = construirDiagnosticos({
+      ...emptyIndex(),
+      consciencias: [consciencia({ avisos: ['aviso 1', 'aviso 2'] })],
+    });
+    const internos = d.filter((x) => x.categoria === 'interno');
+    expect(internos).toHaveLength(2);
+  });
+});
+
+// ─── Novos testes: agruparDiagnosticos ───────────────────────────────────────
+
+describe('agruparDiagnosticos', () => {
+  it('avisos internos com mesma mensagem e tipo são agrupados', () => {
+    const d: readonly ContrariusDiagnostico[] = [
+      { categoria: 'interno', nivel: 'aviso', filePath: 'a.md', mensagem: 'campo ausente', tipoEntidade: 'relacao' },
+      { categoria: 'interno', nivel: 'aviso', filePath: 'b.md', mensagem: 'campo ausente', tipoEntidade: 'relacao' },
+    ];
+    const groups = agruparDiagnosticos(d);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].quantidade).toBe(2);
+  });
+
+  it('mensagens iguais em tipos de entidade diferentes não são agrupadas', () => {
+    const d: readonly ContrariusDiagnostico[] = [
+      { categoria: 'interno', nivel: 'aviso', filePath: 'a.md', mensagem: 'campo ausente', tipoEntidade: 'consciencia' },
+      { categoria: 'interno', nivel: 'aviso', filePath: 'b.md', mensagem: 'campo ausente', tipoEntidade: 'relacao' },
+    ];
+    const groups = agruparDiagnosticos(d);
+    expect(groups).toHaveLength(2);
+  });
+
+  it('categorias diferentes não são agrupadas mesmo com mensagem igual', () => {
+    const d: readonly ContrariusDiagnostico[] = [
+      { categoria: 'indexacao', nivel: 'aviso', filePath: 'a.md', mensagem: 'campo ausente' },
+      { categoria: 'interno', nivel: 'aviso', filePath: 'b.md', mensagem: 'campo ausente', tipoEntidade: 'lugar' },
+    ];
+    const groups = agruparDiagnosticos(d);
+    expect(groups).toHaveLength(2);
+  });
+
+  it('quantidade corresponde a itens.length em todos os grupos', () => {
+    const d: readonly ContrariusDiagnostico[] = [
+      { categoria: 'interno', nivel: 'aviso', filePath: 'a.md', mensagem: 'msg', tipoEntidade: 'evento' },
+      { categoria: 'interno', nivel: 'aviso', filePath: 'b.md', mensagem: 'msg', tipoEntidade: 'evento' },
+      { categoria: 'interno', nivel: 'aviso', filePath: 'c.md', mensagem: 'msg', tipoEntidade: 'evento' },
+      { categoria: 'erro', nivel: 'erro', filePath: 'd.md', mensagem: 'outro' },
+    ];
+    const groups = agruparDiagnosticos(d);
+    for (const g of groups) {
+      expect(g.quantidade).toBe(g.itens.length);
+    }
+  });
+
+  it('ordena categorias: erro primeiro, indexacao depois, interno por último', () => {
+    const d: readonly ContrariusDiagnostico[] = [
+      { categoria: 'interno', nivel: 'aviso', filePath: 'a.md', mensagem: 'x', tipoEntidade: 'evento' },
+      { categoria: 'indexacao', nivel: 'aviso', filePath: 'b.md', mensagem: 'y' },
+      { categoria: 'erro', nivel: 'erro', filePath: 'c.md', mensagem: 'z' },
+    ];
+    const groups = agruparDiagnosticos(d);
+    expect(groups.map((g) => g.categoria)).toEqual(['erro', 'indexacao', 'interno']);
+  });
+
+  it('maior quantidade aparece primeiro dentro da mesma categoria', () => {
+    const d: readonly ContrariusDiagnostico[] = [
+      { categoria: 'interno', nivel: 'aviso', filePath: 'a.md', mensagem: 'msg-um', tipoEntidade: 'evento' },
+      { categoria: 'interno', nivel: 'aviso', filePath: 'b.md', mensagem: 'msg-dois', tipoEntidade: 'evento' },
+      { categoria: 'interno', nivel: 'aviso', filePath: 'c.md', mensagem: 'msg-dois', tipoEntidade: 'evento' },
+    ];
+    const groups = agruparDiagnosticos(d);
+    const internoGroups = groups.filter((g) => g.categoria === 'interno');
+    expect(internoGroups[0].mensagem).toBe('msg-dois');
+    expect(internoGroups[1].mensagem).toBe('msg-um');
+  });
+});
+
+// ─── Novos testes: contarDiagnosticosPorCategoria ────────────────────────────
+
+describe('contarDiagnosticosPorCategoria', () => {
+  it('contagem por categoria usa número de ocorrências', () => {
+    const d: readonly ContrariusDiagnostico[] = [
+      { categoria: 'erro', nivel: 'erro', filePath: 'a.md', mensagem: 'e1' },
+      { categoria: 'erro', nivel: 'erro', filePath: 'b.md', mensagem: 'e2' },
+      { categoria: 'indexacao', nivel: 'aviso', filePath: 'c.md', mensagem: 'i1' },
+      { categoria: 'interno', nivel: 'aviso', filePath: 'd.md', mensagem: 'n1', tipoEntidade: 'evento' },
+    ];
+    const counts = contarDiagnosticosPorCategoria(d);
+    expect(counts.erro).toBe(2);
+    expect(counts.indexacao).toBe(1);
+    expect(counts.interno).toBe(1);
+  });
+
+  it('total inclui as três categorias', () => {
+    const d: readonly ContrariusDiagnostico[] = [
+      { categoria: 'erro', nivel: 'erro', filePath: 'a.md', mensagem: 'e1' },
+      { categoria: 'indexacao', nivel: 'aviso', filePath: 'c.md', mensagem: 'i1' },
+      { categoria: 'interno', nivel: 'aviso', filePath: 'd.md', mensagem: 'n1', tipoEntidade: 'evento' },
+    ];
+    expect(contarDiagnosticosPorCategoria(d).todos).toBe(3);
+  });
+});
+
+// ─── Novos testes: filtrarGruposDiagnostico ───────────────────────────────────
+
+describe('filtrarGruposDiagnostico', () => {
+  it('filtro por categoria erro retorna apenas grupos de erro', () => {
+    const groups = [
+      makeGroup({ categoria: 'erro', nivel: 'erro', mensagem: 'falha x' }),
+      makeGroup({ categoria: 'indexacao', nivel: 'aviso', mensagem: 'idx y' }),
+    ];
+    const result = filtrarGruposDiagnostico(groups, 'erro', '');
+    expect(result).toHaveLength(1);
+    expect(result[0].categoria).toBe('erro');
+  });
+
+  it('filtro por categoria indexacao retorna apenas grupos de indexacao', () => {
+    const groups = [
+      makeGroup({ categoria: 'erro', nivel: 'erro', mensagem: 'falha x' }),
+      makeGroup({ categoria: 'indexacao', nivel: 'aviso', mensagem: 'idx y' }),
+      makeGroup({ categoria: 'interno', nivel: 'aviso', mensagem: 'int z' }),
+    ];
+    const result = filtrarGruposDiagnostico(groups, 'indexacao', '');
+    expect(result).toHaveLength(1);
+    expect(result[0].categoria).toBe('indexacao');
+  });
+
+  it('filtro por categoria interno retorna apenas grupos internos', () => {
+    const groups = [
+      makeGroup({ categoria: 'erro', nivel: 'erro', mensagem: 'falha x' }),
+      makeGroup({ categoria: 'interno', nivel: 'aviso', mensagem: 'int z' }),
+    ];
+    const result = filtrarGruposDiagnostico(groups, 'interno', '');
+    expect(result).toHaveLength(1);
+    expect(result[0].categoria).toBe('interno');
+  });
+
+  it('filtro todos retorna todos os grupos', () => {
+    const groups = [
+      makeGroup({ categoria: 'erro', nivel: 'erro', mensagem: 'a' }),
+      makeGroup({ categoria: 'indexacao', nivel: 'aviso', mensagem: 'b' }),
+      makeGroup({ categoria: 'interno', nivel: 'aviso', mensagem: 'c' }),
+    ];
+    expect(filtrarGruposDiagnostico(groups, 'todos', '')).toHaveLength(3);
+  });
+
+  it('busca por mensagem filtra grupos', () => {
+    const groups = [
+      makeGroup({
+        mensagem: 'campo tipo ausente',
+        itens: [{ categoria: 'interno', nivel: 'aviso', filePath: 'arq/nota.md', mensagem: 'campo tipo ausente', tipoEntidade: 'evento' }],
+      }),
+      makeGroup({
+        mensagem: 'valor fora do intervalo',
+        itens: [{ categoria: 'interno', nivel: 'aviso', filePath: 'arq/nota2.md', mensagem: 'valor fora do intervalo', tipoEntidade: 'evento' }],
+      }),
+    ];
+    const result = filtrarGruposDiagnostico(groups, 'todos', 'campo tipo');
+    expect(result).toHaveLength(1);
+    expect(result[0].mensagem).toBe('campo tipo ausente');
+  });
+
+  it('busca por caminho filtra grupos', () => {
+    const grupos = [
+      makeGroup({
+        mensagem: 'aviso qualquer',
+        itens: [{ categoria: 'interno', nivel: 'aviso', filePath: 'pasta/alvo.md', mensagem: 'aviso qualquer', tipoEntidade: 'evento' }],
+      }),
+      makeGroup({
+        mensagem: 'outro aviso',
+        itens: [{ categoria: 'interno', nivel: 'aviso', filePath: 'pasta/diferente.md', mensagem: 'outro aviso', tipoEntidade: 'evento' }],
+      }),
+    ];
+    const result = filtrarGruposDiagnostico(grupos, 'todos', 'alvo');
+    expect(result).toHaveLength(1);
+    expect(result[0].itens[0].filePath).toBe('pasta/alvo.md');
+  });
+
+  it('busca por tipo de entidade filtra grupos', () => {
+    // Mensagens e caminhos são neutros: não contêm 'consciencia'
+    const grupos: GrupoDiagnostico[] = [
+      {
+        categoria: 'interno',
+        nivel: 'aviso',
+        mensagem: 'aviso neutro alfa',
+        tipoEntidade: 'consciencia',
+        itens: [{ categoria: 'interno', nivel: 'aviso', filePath: 'neutro/alfa.md', mensagem: 'aviso neutro alfa', tipoEntidade: 'consciencia' }],
+        quantidade: 1,
+      },
+      {
+        categoria: 'interno',
+        nivel: 'aviso',
+        mensagem: 'aviso neutro beta',
+        tipoEntidade: 'evento',
+        itens: [{ categoria: 'interno', nivel: 'aviso', filePath: 'neutro/beta.md', mensagem: 'aviso neutro beta', tipoEntidade: 'evento' }],
+        quantidade: 1,
+      },
+    ];
+    const result = filtrarGruposDiagnostico(grupos, 'todos', 'consciencia');
+    expect(result).toHaveLength(1);
+    expect(result[0].tipoEntidade).toBe('consciencia');
+  });
+
+  it('busca ignora acentos e caixa', () => {
+    const grupos = [
+      makeGroup({
+        mensagem: 'índice inválido',
+        itens: [{ categoria: 'interno', nivel: 'aviso', filePath: 'arq/nota.md', mensagem: 'índice inválido', tipoEntidade: 'evento' }],
+      }),
+    ];
+    expect(filtrarGruposDiagnostico(grupos, 'todos', 'INDICE INVALIDO')).toHaveLength(1);
+  });
+
+  it('não modifica os arrays recebidos', () => {
+    const grupos = [
+      makeGroup({ mensagem: 'aviso a' }),
+      makeGroup({ categoria: 'erro', nivel: 'erro', mensagem: 'aviso b' }),
+    ];
+    const original = [...grupos];
+    filtrarGruposDiagnostico(grupos, 'erro', 'a');
+    expect(grupos).toEqual(original);
+  });
+});
+
+// ─── Novos testes: resumo — cartão de diagnósticos ───────────────────────────
+
+describe('resumo — cartão de diagnósticos', () => {
+  it('inclui avisos internos no total e preserva os demais totais', () => {
+    // index() tem: 1 erro, 0 avisosIndexacao, 3 avisos internos (consciencia:1, relacao:2)
+    const resumo = construirResumo(index());
+    expect(resumo.erros).toBe(1);
+    expect(resumo.avisosIndexacao).toBe(0);
+    expect(resumo.avisosInternos).toBe(3);
+    expect(resumo.consciencias).toBe(1);
+    expect(resumo.retrovidas).toBe(1);
+    expect(resumo.eventos).toBe(1);
+    expect(resumo.lugares).toBe(1);
+    expect(resumo.relacoes).toBe(1);
+    expect(resumo.totalEntidades).toBe(5);
   });
 });
