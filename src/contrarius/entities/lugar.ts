@@ -17,6 +17,7 @@ const CAMPOS_CONHECIDOS = new Set([
 export function normalizarLugar(
   frontmatter: Readonly<Record<string, unknown>>,
   filePath: string,
+  provisional = false,
 ): Lugar {
   const avisos: string[] = [];
   const idRaw = primeiroPresente(frontmatter, ['id_lugar', 'codigo', 'id']);
@@ -29,7 +30,7 @@ export function normalizarLugar(
     'nome_preferencial_saga', 'nome preferido', 'nome_preferido', 'nome_atual',
   ]);
   const nomePreferido = nomePreferidoRaw !== undefined ? normStr(nomePreferidoRaw) : '';
-  if (nomePreferido === '') avisos.push('Não foi possível obter nomePreferido.');
+  if (!provisional && nomePreferido === '') avisos.push('Não foi possível obter nomePreferido.');
 
   const nomesVariantesRaw = primeiroPresente(frontmatter, ['nomes_variantes', 'nomesVariantes']);
   const nomesHistoricosRaw = primeiroPresente(frontmatter, ['nomes_historicos', 'nomesHistoricos']);

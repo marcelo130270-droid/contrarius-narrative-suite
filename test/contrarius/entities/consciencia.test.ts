@@ -137,12 +137,11 @@ describe('normalizarConsciencia — fixture consciencia-basica.md', () => {
     expect((fm['campo_lista_extra'] as string[]).length).toBe(2);
   });
 
-  it('18. nome ausente produz string vazia e um aviso', () => {
+  it('18. nome ausente com basename válido usa o basename como nome de exibição sem aviso genérico', () => {
     const fm: Record<string, unknown> = { reaparece: true };
     const result = normalizarConsciencia(fm, 'test/sem-nome.md');
-    expect(result.nome).toBe('');
-    expect(result.avisos.length).toBeGreaterThan(0);
-    expect(result.avisos.some((a) => a.includes('nome'))).toBe(true);
+    expect(result.nome).toBe('sem-nome');
+    expect(result.avisos.some((a) => a.includes('nome'))).toBe(false);
   });
 
   it('19. caminhos Windows com \\ produzem basename correto', () => {
@@ -163,16 +162,53 @@ describe('normalizarConsciencia — fixture consciencia-basica.md', () => {
     expect(result.id).toBe('C-001.txt');
   });
 
-  it('22. campos ausentes resultam nos padrões: string vazia, listas vazias, reaparece false', () => {
+  it('22. campos ausentes resultam nos padrões: basename como nome, listas vazias, reaparece false', () => {
     const fm: Record<string, unknown> = {};
     const result = normalizarConsciencia(fm, 'test/vazio.md');
-    expect(result.nome).toBe('');
+    expect(result.nome).toBe('vazio');
     expect(result.identExtraf).toBe('');
     expect(result.nucleoGeo).toEqual([]);
     expect(result.religiao).toEqual([]);
     expect(result.holopensenes).toEqual([]);
     expect(result.grupocarma).toEqual([]);
     expect(result.reaparece).toBe(false);
+  });
+});
+
+describe('normalizarConsciencia — fallback de basename para nome (requisitos 1–4)', () => {
+  it('1. Consciência sem campo nome usa o basename do arquivo como nome de exibição', () => {
+    const result = normalizarConsciencia({}, '02_Consciencias/C-001_Contrarius_Enantios.md');
+    expect(result.nome).toBe('C-001_Contrarius_Enantios');
+  });
+
+  it('2. Consciência sem nome com basename válido não recebe o aviso genérico de nome ausente', () => {
+    const result = normalizarConsciencia({}, '02_Consciencias/C-001_Contrarius_Enantios.md');
+    expect(result.avisos.some((a) => a.includes('nome'))).toBe(false);
+  });
+
+  it('3. Campo nome no frontmatter tem precedência sobre o basename', () => {
+    const result = normalizarConsciencia(
+      { nome: 'Thalion' },
+      '02_Consciencias/C-001_Contrarius_Enantios.md',
+    );
+    expect(result.nome).toBe('Thalion');
+  });
+
+  it('4. O id estável não é alterado pelo fallback de nome', () => {
+    const resultSemId = normalizarConsciencia({}, '02_Consciencias/C-001_Contrarius_Enantios.md');
+    expect(resultSemId.id).toBe('C-001_Contrarius_Enantios');
+    const resultComId = normalizarConsciencia(
+      { id: 'C-001' },
+      '02_Consciencias/C-001_Contrarius_Enantios.md',
+    );
+    expect(resultComId.id).toBe('C-001');
+    expect(resultComId.nome).toBe('C-001_Contrarius_Enantios');
+  });
+
+  it('aviso de nome ausente é emitido somente quando o basename também está vazio', () => {
+    const result = normalizarConsciencia({}, '');
+    expect(result.nome).toBe('');
+    expect(result.avisos.some((a) => a.includes('nome'))).toBe(true);
   });
 });
 

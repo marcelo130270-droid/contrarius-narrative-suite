@@ -384,3 +384,60 @@ describe('indexarContrarius — resiliência', () => {
     expect(result).toEqual({ consciencias: [], retrovidas: [], eventos: [], lugares: [], relacoes: [], avisosIndexacao: [], erros: [] });
   });
 });
+
+describe('indexarContrarius — notas provisórias sem frontmatter (requisitos 9–15)', () => {
+  it('req. 9: Evento sem frontmatter é indexado provisoriamente e gera exatamente um aviso de indexação', async () => {
+    const path = '05_Eventos/E-Provisorio.md';
+    const result = await indexarContrarius(deps([file(path)], { [path]: null }));
+    expect(result.eventos).toHaveLength(1);
+    expect(result.avisosIndexacao).toHaveLength(1);
+    expect(result.avisosIndexacao[0].filePath).toBe(path);
+    expect(result.erros).toEqual([]);
+  });
+
+  it('req. 10: Evento provisório não produz aviso interno derivado de titulo ausente', async () => {
+    const path = '05_Eventos/E-Provisorio.md';
+    const result = await indexarContrarius(deps([file(path)], { [path]: null }));
+    expect(result.eventos[0].avisos.some((a) => a.includes('titulo'))).toBe(false);
+  });
+
+  it('req. 11: Lugar sem frontmatter é indexado provisoriamente e gera exatamente um aviso de indexação', async () => {
+    const path = '06_Lugares/L-Provisorio.md';
+    const result = await indexarContrarius(deps([file(path)], { [path]: null }));
+    expect(result.lugares).toHaveLength(1);
+    expect(result.avisosIndexacao).toHaveLength(1);
+    expect(result.avisosIndexacao[0].filePath).toBe(path);
+    expect(result.erros).toEqual([]);
+  });
+
+  it('req. 12: Lugar provisório não produz aviso interno derivado de nomePreferido ausente', async () => {
+    const path = '06_Lugares/L-Provisorio.md';
+    const result = await indexarContrarius(deps([file(path)], { [path]: null }));
+    expect(result.lugares[0].avisos.some((a) => a.includes('nomePreferido'))).toBe(false);
+  });
+
+  it('req. 13: entidade provisória não produz nenhum aviso interno', async () => {
+    const evPath = '05_Eventos/E-Prov.md';
+    const lPath = '06_Lugares/L-Prov.md';
+    const result = await indexarContrarius(deps(
+      [file(evPath), file(lPath)],
+      { [evPath]: null, [lPath]: null },
+    ));
+    expect(result.eventos[0].avisos).toEqual([]);
+    expect(result.lugares[0].avisos).toEqual([]);
+  });
+
+  it('req. 14: Evento com frontmatter presente mas titulo ausente continua gerando aviso interno', async () => {
+    const path = '05_Eventos/E-Invalido.md';
+    const result = await indexarContrarius(deps([file(path)], { [path]: { natureza: 'político' } }));
+    expect(result.eventos).toHaveLength(1);
+    expect(result.eventos[0].avisos.some((a) => a.includes('titulo'))).toBe(true);
+  });
+
+  it('req. 15: Lugar com frontmatter presente mas nomePreferido ausente continua gerando aviso interno', async () => {
+    const path = '06_Lugares/L-Invalido.md';
+    const result = await indexarContrarius(deps([file(path)], { [path]: { coordenadas: '1.0, 2.0' } }));
+    expect(result.lugares).toHaveLength(1);
+    expect(result.lugares[0].avisos.some((a) => a.includes('nomePreferido'))).toBe(true);
+  });
+});

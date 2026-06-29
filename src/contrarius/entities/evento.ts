@@ -15,6 +15,7 @@ const CAMPOS_CONHECIDOS = new Set([
 export function normalizarEvento(
   frontmatter: Readonly<Record<string, unknown>>,
   filePath: string,
+  provisional = false,
 ): Evento {
   const avisos: string[] = [];
 
@@ -25,7 +26,7 @@ export function normalizarEvento(
   }
 
   const titulo = normStr(frontmatter['titulo']);
-  if (titulo === '') avisos.push('Campo "titulo" ausente ou vazio.');
+  if (!provisional && titulo === '') avisos.push('Campo "titulo" ausente ou vazio.');
 
   const anoOrdemRaw = primeiroPresente(frontmatter, ['ano_ordem', 'anoOrdem']);
   const dataInicioRaw = primeiroPresente(frontmatter, ['data_inicio', 'dataInicio']);
