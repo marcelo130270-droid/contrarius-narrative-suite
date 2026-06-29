@@ -123,14 +123,87 @@ describe('indexarContrarius — escopo das pastas', () => {
 });
 
 describe('indexarContrarius — leitura de frontmatter', () => {
-  it('registra frontmatter ausente nas pastas canônicas e continua', async () => {
+  it('indexa nota sem frontmatter como entidade incompleta e registra aviso', async () => {
     const files = [file('05_Eventos/Sem.md'), file('05_Eventos/Com.md')];
     const result = await indexarContrarius(deps(files, {
       '05_Eventos/Sem.md': null, '05_Eventos/Com.md': { titulo: 'Com' },
     }));
+    expect(result.eventos).toHaveLength(2);
+    expect(result.eventos[0].id).toBe('Com');
+    expect(result.eventos[1].id).toBe('Sem');
+    expect(result.eventos[1].frontmatterRaw).toEqual({});
+    expect(result.erros).toEqual([]);
+    expect(result.avisosIndexacao).toHaveLength(1);
+    expect(result.avisosIndexacao[0]).toMatchObject({
+      filePath: '05_Eventos/Sem.md',
+      campo: 'frontmatter',
+    });
+    expect(result.avisosIndexacao[0].mensagem).toContain('incompleta');
+  });
+
+  it('indexa frontmatter vazio como entidade incompleta', async () => {
+    const path = '06_Lugares/L-013_Provisorio.md';
+    const custom: IndexerDeps = {
+      getMarkdownFiles: () => [file(path)],
+      getFileCache: () => null,
+      cachedRead: async () => `---
+
+---
+
+Anotações provisórias`,
+      parseYaml,
+    };
+    const result = await indexarContrarius(custom);
+    expect(result.lugares).toHaveLength(1);
+    expect(result.lugares[0].id).toBe('L-013_Provisorio');
+    expect(result.lugares[0].frontmatterRaw).toEqual({});
+    expect(result.erros).toEqual([]);
+    expect(result.avisosIndexacao[0].mensagem).toContain('incompleta');
+  });
+
+  it('indexa objeto vazio fornecido pelo cache como entidade incompleta', async () => {
+    const path = '05_Eventos/E-X_Rascunho.md';
+    const result = await indexarContrarius(deps([file(path)], { [path]: {} }));
     expect(result.eventos).toHaveLength(1);
+    expect(result.eventos[0].id).toBe('E-X_Rascunho');
+    expect(result.erros).toEqual([]);
+    expect(result.avisosIndexacao[0].mensagem).toContain('Frontmatter vazio');
+  });
+
+  it('mantém frontmatter YAML inválido como erro e não indexa a nota', async () => {
+    const path = '05_Eventos/Invalido.md';
+    const custom: IndexerDeps = {
+      getMarkdownFiles: () => [file(path)],
+      getFileCache: () => null,
+      cachedRead: async () => `---
+titulo: [valor inválido
+---
+
+Texto`,
+      parseYaml,
+    };
+    const result = await indexarContrarius(custom);
+    expect(result.eventos).toHaveLength(0);
+    expect(result.avisosIndexacao).toEqual([]);
     expect(result.erros).toHaveLength(1);
-    expect(result.erros[0].filePath).toBe('05_Eventos/Sem.md');
+    expect(result.erros[0].mensagem).toContain('inválido ou ilegível');
+  });
+
+  it('mantém bloco sem delimitador final como erro', async () => {
+    const path = '06_Lugares/SemFechamento.md';
+    const custom: IndexerDeps = {
+      getMarkdownFiles: () => [file(path)],
+      getFileCache: () => null,
+      cachedRead: async () => `---
+nome_atual: Lugar sem fechamento
+
+Texto`,
+      parseYaml,
+    };
+    const result = await indexarContrarius(custom);
+    expect(result.lugares).toHaveLength(0);
+    expect(result.avisosIndexacao).toEqual([]);
+    expect(result.erros).toHaveLength(1);
   });
 
   it('usa fallback do conteúdo Markdown quando o cache não tem frontmatter', async () => {
@@ -303,7 +376,7 @@ describe('indexarContrarius — resiliência', () => {
     };
     const result = await indexarContrarius(custom);
     expect(result.eventos.map((item) => item.id)).toEqual(['B']);
-    expect(result.erros[0].mensagem).toContain('Frontmatter ausente');
+    expect(result.erros[0].mensagem).toContain('inválido ou ilegível');
   });
 
   it('retorna coleções vazias quando não há arquivos', async () => {

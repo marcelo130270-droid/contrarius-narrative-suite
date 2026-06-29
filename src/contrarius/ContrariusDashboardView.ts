@@ -10,6 +10,7 @@ import {
 import { indexarContrarius } from './indexer';
 import type {
   Consciencia,
+  ContrariusBase,
   ContrariusIndex,
   Evento,
   Lugar,
@@ -58,6 +59,19 @@ function joinValues(values: readonly string[], fallback = '—'): string {
 
 function formatYear(value: number | null): string {
   return value === null ? '—' : String(value);
+}
+
+function entidadeIncompleta(item: ContrariusBase): boolean {
+  return Object.keys(item.frontmatterRaw).length === 0;
+}
+
+function marcadorEntidade(item: ContrariusBase, marcadorExistente?: string): string | undefined {
+  const marcadores: string[] = [];
+  if (marcadorExistente !== undefined && marcadorExistente.trim() !== '') {
+    marcadores.push(marcadorExistente);
+  }
+  if (entidadeIncompleta(item)) marcadores.push('Incompleta');
+  return marcadores.length > 0 ? marcadores.join(' · ') : undefined;
 }
 
 export class ContrariusDashboardView extends ItemView {
@@ -370,7 +384,11 @@ export class ContrariusDashboardView extends ItemView {
       const summary = details.createEl('summary');
       applyStyles(summary, { cursor: 'pointer', fontWeight: '600' });
       const lives = grouped.get(item.id) ?? [];
-      summary.setText(`${nomeConsciencia(item)} · ${item.id} · ${lives.length} retrovida(s)${item.naturezaConsciencial === 'pre-humana' ? ' · Pré-humana' : ''}`);
+      const markers = marcadorEntidade(
+        item,
+        item.naturezaConsciencial === 'pre-humana' ? 'Pré-humana' : undefined,
+      );
+      summary.setText(`${nomeConsciencia(item)} · ${item.id} · ${lives.length} retrovida(s)${markers !== undefined ? ` · ${markers}` : ''}`);
 
       const body = details.createDiv();
       applyStyles(body, { paddingTop: '10px' });
@@ -385,10 +403,14 @@ export class ContrariusDashboardView extends ItemView {
         const heading = body.createEl('h4', { text: 'Retrovidas' });
         applyStyles(heading, { margin: '14px 0 6px' });
         for (const life of lives) {
+          const lifeMarker = marcadorEntidade(
+            life,
+            life.naturezaConsciencial === 'pre-humana' ? 'Pré-humana' : undefined,
+          );
           this.renderCompactRow(
             body,
             nomeRetrovida(life),
-            `${life.naturezaConsciencial === 'pre-humana' ? 'Pré-humana · ' : ''}${life.vida || 'vida não informada'} · ${formatYear(life.nascimento)}–${formatYear(life.morte)}`,
+            `${lifeMarker !== undefined ? `${lifeMarker} · ` : ''}${life.vida || 'vida não informada'} · ${formatYear(life.nascimento)}–${formatYear(life.morte)}`,
             life.filePath,
           );
         }
@@ -414,7 +436,7 @@ export class ContrariusDashboardView extends ItemView {
         ['Período', joinValues(item.periodo)],
         ['Nascimento / morte', `${formatYear(item.nascimento)} / ${formatYear(item.morte)}`],
         ['Livro', joinValues(item.livro)],
-      ], item.naturezaConsciencial === 'pre-humana' ? 'Pré-humana' : undefined);
+      ], marcadorEntidade(item, item.naturezaConsciencial === 'pre-humana' ? 'Pré-humana' : undefined));
     }
   }
 
@@ -435,7 +457,7 @@ export class ContrariusDashboardView extends ItemView {
         ['Local', joinValues(item.local)],
         ['Participantes', joinValues(item.participantes)],
         ['Livro', joinValues(item.livro)],
-      ]);
+      ], marcadorEntidade(item));
     }
   }
 
@@ -451,7 +473,7 @@ export class ContrariusDashboardView extends ItemView {
         ['Região atual', item.regiaoAtual || '—'],
         ['País atual', item.paisAtual || '—'],
         ['Coordenadas', item.coordenadasGoogleEarth || item.coordenadas || '—'],
-      ]);
+      ], marcadorEntidade(item));
     }
   }
 
@@ -467,7 +489,7 @@ export class ContrariusDashboardView extends ItemView {
         ['Tipo', joinValues(item.tipoRelacao)],
         ['Intensidade', item.intensidade || '—'],
         ['Estado', item.estado || '—'],
-      ]);
+      ], marcadorEntidade(item));
     }
   }
 
@@ -579,13 +601,15 @@ export class ContrariusDashboardView extends ItemView {
 
   private renderBadge(container: HTMLElement, label: string): void {
     const badge = container.createSpan({ text: label });
+    const incomplete = label.includes('Incompleta');
     applyStyles(badge, {
       display: 'inline-flex',
       alignItems: 'center',
       padding: '2px 7px',
       borderRadius: '999px',
-      background: 'var(--background-modifier-success)',
-      color: 'var(--text-normal)',
+      background: incomplete ? 'var(--background-secondary)' : 'var(--background-modifier-success)',
+      color: incomplete ? 'var(--text-warning)' : 'var(--text-normal)',
+      border: incomplete ? '1px solid var(--text-warning)' : '1px solid transparent',
       fontSize: '0.72em',
       fontWeight: '600',
     });
