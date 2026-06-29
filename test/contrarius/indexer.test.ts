@@ -210,6 +210,60 @@ describe('indexarContrarius — diagnóstico de tipos e IDs', () => {
   });
 });
 
+describe('indexarContrarius — compatibilidade pré-humana e aliases legados', () => {
+  it('indexa Consciência pré-humana sem erro de tipo', async () => {
+    const path = '02_Consciencias/P-001.md';
+    const result = await indexarContrarius(deps([file(path)], {
+      [path]: { tipo: 'Consc Pré Humana', id: 'P-001' },
+    }));
+    expect(result.consciencias).toHaveLength(1);
+    expect(result.consciencias[0].naturezaConsciencial).toBe('pre-humana');
+    expect(result.erros).toEqual([]);
+  });
+
+  it('indexa Retrovida pré-humana com alias canônico', async () => {
+    const path = '03_Retrovidas/Retrovidas Pre-Humanas/P-001_V01.md';
+    const result = await indexarContrarius(deps([file(path)], {
+      [path]: { tipo: 'Retrovida_Pre_Humana', consciencia: 'P-001', vida: 1, nomes: ['Animal'] },
+    }));
+    expect(result.retrovidas).toHaveLength(1);
+    expect(result.retrovidas[0].naturezaConsciencial).toBe('pre-humana');
+    expect(result.erros).toEqual([]);
+    expect(result.avisosIndexacao).toEqual([]);
+  });
+
+  it('usa a pasta para Retrovida com tipo legado de Consciência e registra aviso', async () => {
+    const path = '03_Retrovidas/Retrovidas Pre-Humanas/P-002_V01.md';
+    const result = await indexarContrarius(deps([file(path)], {
+      [path]: { tipo: 'Consc Pré Humana', consciencia: 'P-002', vida: 1, nomes: ['Animal'] },
+    }));
+    expect(result.retrovidas).toHaveLength(1);
+    expect(result.retrovidas[0].naturezaConsciencial).toBe('pre-humana');
+    expect(result.erros).toEqual([]);
+    expect(result.avisosIndexacao).toHaveLength(1);
+    expect(result.avisosIndexacao[0].mensagem).toContain('Tipo legado incompatível');
+  });
+
+  it('reconhece Relacao_Grupocarmica sem diagnóstico de tipo desconhecido', async () => {
+    const path = '04_Relacoes/REL-001.md';
+    const result = await indexarContrarius(deps([file(path)], {
+      [path]: { tipo: 'Relacao_Grupocarmica', a: 'C-001', b: 'C-002' },
+    }));
+    expect(result.relacoes).toHaveLength(1);
+    expect(result.erros).toEqual([]);
+  });
+
+  it('mantém conflito verdadeiro entre categorias não conscienciais como erro', async () => {
+    const path = '05_Eventos/E.md';
+    const result = await indexarContrarius(deps([file(path)], {
+      [path]: { tipo: 'Lugar', titulo: 'Evento' },
+    }));
+    expect(result.eventos).toHaveLength(1);
+    expect(result.erros).toHaveLength(1);
+    expect(result.avisosIndexacao).toEqual([]);
+  });
+});
+
 describe('indexarContrarius — resiliência', () => {
   it('converte falha ao listar arquivos em erro de índice', async () => {
     const broken: IndexerDeps = {
@@ -254,6 +308,6 @@ describe('indexarContrarius — resiliência', () => {
 
   it('retorna coleções vazias quando não há arquivos', async () => {
     const result = await indexarContrarius(deps([], {}));
-    expect(result).toEqual({ consciencias: [], retrovidas: [], eventos: [], lugares: [], relacoes: [], erros: [] });
+    expect(result).toEqual({ consciencias: [], retrovidas: [], eventos: [], lugares: [], relacoes: [], avisosIndexacao: [], erros: [] });
   });
 });

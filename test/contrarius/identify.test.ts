@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   identificarTipoEntidade,
+  inferirNaturezaConsciencial,
   normalizarTipoDeclarado,
   PASTAS_CONTRARIUS_PADRAO,
   tipoPorPasta,
@@ -80,6 +81,19 @@ describe('normalizarTipoDeclarado', () => {
     expect(normalizarTipoDeclarado(['', 'Evento'])).toBe('evento');
   });
 
+  it('reconhece aliases pré-humanos legados', () => {
+    expect(normalizarTipoDeclarado('Consc Pré Humana')).toBe('consciencia');
+    expect(normalizarTipoDeclarado('Consc_Pre_Humana')).toBe('consciencia');
+    expect(normalizarTipoDeclarado('Consciência Pré-Humana')).toBe('consciencia');
+    expect(normalizarTipoDeclarado('Retrovida_Pre_Humana')).toBe('retrovida');
+    expect(normalizarTipoDeclarado('Retrovida Pré-Humana')).toBe('retrovida');
+  });
+
+  it('reconhece Relação Grupocármica como Relação', () => {
+    expect(normalizarTipoDeclarado('Relacao_Grupocarmica')).toBe('relacao');
+    expect(normalizarTipoDeclarado('Relação Grupocármica')).toBe('relacao');
+  });
+
   it('retorna null para tipo desconhecido', () => {
     expect(normalizarTipoDeclarado('desconhecido')).toBeNull();
   });
@@ -123,8 +137,52 @@ describe('identificarTipoEntidade', () => {
     expect(identificarTipoEntidade('Notas/X.md', {}).tipo).toBeNull();
   });
 
+  it('trata tipo pré-humano incompatível com pasta como aviso legado, não conflito', () => {
+    const result = identificarTipoEntidade(
+      '03_Retrovidas/Retrovidas Pre-Humanas/P-002_V01.md',
+      { tipo: 'Consc Pré Humana', consciencia: 'P-002' },
+    );
+    expect(result.tipo).toBe('retrovida');
+    expect(result.tipoFrontmatter).toBe('consciencia');
+    expect(result.conflito).toBe(false);
+    expect(result.incompatibilidadeLegada).toBe(true);
+    expect(result.naturezaConsciencial).toBe('pre-humana');
+  });
+
+  it('identifica natureza pré-humana pelo alias declarado', () => {
+    const result = identificarTipoEntidade('02_Consciencias/P-001.md', { tipo: 'Consc Pré Humana' });
+    expect(result.tipo).toBe('consciencia');
+    expect(result.naturezaConsciencial).toBe('pre-humana');
+  });
+
+  it('mantém natureza humana nos tipos canônicos', () => {
+    expect(identificarTipoEntidade('02_Consciencias/C-001.md', { tipo: 'Consciencia' }).naturezaConsciencial).toBe('humana');
+    expect(identificarTipoEntidade('03_Retrovidas/C-001_V01.md', { tipo: 'Retrovida' }).naturezaConsciencial).toBe('humana');
+  });
+
   it('respeita pastas personalizadas', () => {
     const custom = { ...PASTAS_CONTRARIUS_PADRAO, lugar: 'Canon/Locais' };
     expect(identificarTipoEntidade('Canon/Locais/L.md', {}, custom).tipo).toBe('lugar');
+  });
+});
+
+
+describe('inferirNaturezaConsciencial', () => {
+  it('usa pasta pré-humana como fallback', () => {
+    expect(inferirNaturezaConsciencial(
+      '03_Retrovidas/Retrovidas Pre-Humanas/X.md',
+      { tipo: 'Retrovida' },
+      'retrovida',
+    )).toBe('pre-humana');
+  });
+
+  it('usa prefixo P- no id, consciência ou basename', () => {
+    expect(inferirNaturezaConsciencial('02_Consciencias/X.md', { id: 'P-001' }, 'consciencia')).toBe('pre-humana');
+    expect(inferirNaturezaConsciencial('03_Retrovidas/X.md', { consciencia: 'P-002' }, 'retrovida')).toBe('pre-humana');
+    expect(inferirNaturezaConsciencial('03_Retrovidas/P-003_V01.md', {}, 'retrovida')).toBe('pre-humana');
+  });
+
+  it('não classifica ids humanos como pré-humanos', () => {
+    expect(inferirNaturezaConsciencial('02_Consciencias/C-001.md', { id: 'C-001' }, 'consciencia')).toBe('humana');
   });
 });

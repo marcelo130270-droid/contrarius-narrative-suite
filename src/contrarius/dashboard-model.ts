@@ -2,7 +2,10 @@ import type {
   Consciencia,
   ContrariusIndex,
   Evento,
+  IndexError,
+  IndexWarning,
   Lugar,
+  NaturezaConsciencial,
   Relacao,
   Retrovida,
 } from './types';
@@ -16,36 +19,61 @@ export type ContrariusDashboardTab =
   | 'relacoes'
   | 'erros';
 
+export type FiltroNaturezaConsciencial = 'todas' | 'humanas' | 'pre-humanas';
+
 export interface ContrariusDashboardResumo {
   consciencias: number;
+  conscienciasPreHumanas: number;
   retrovidas: number;
+  retrovidasPreHumanas: number;
   eventos: number;
   lugares: number;
   relacoes: number;
+  avisosInternos: number;
+  avisosIndexacao: number;
   avisos: number;
   erros: number;
   totalEntidades: number;
+}
+
+export interface ContrariusDiagnostico {
+  nivel: 'aviso' | 'erro';
+  filePath: string;
+  mensagem: string;
+  campo?: string;
 }
 
 function contarAvisos<T extends { avisos: readonly string[] }>(items: readonly T[]): number {
   return items.reduce((total, item) => total + item.avisos.length, 0);
 }
 
+function contarNatureza<T extends { naturezaConsciencial: NaturezaConsciencial }>(
+  items: readonly T[],
+  natureza: NaturezaConsciencial,
+): number {
+  return items.filter((item) => item.naturezaConsciencial === natureza).length;
+}
+
 export function construirResumo(index: ContrariusIndex): ContrariusDashboardResumo {
-  const avisos =
+  const avisosInternos =
     contarAvisos(index.consciencias) +
     contarAvisos(index.retrovidas) +
     contarAvisos(index.eventos) +
     contarAvisos(index.lugares) +
     contarAvisos(index.relacoes);
+  const avisosIndexacao = index.avisosIndexacao.length;
 
   return {
     consciencias: index.consciencias.length,
+    conscienciasPreHumanas: contarNatureza(index.consciencias, 'pre-humana'),
     retrovidas: index.retrovidas.length,
+    retrovidasPreHumanas: contarNatureza(index.retrovidas, 'pre-humana'),
     eventos: index.eventos.length,
     lugares: index.lugares.length,
     relacoes: index.relacoes.length,
-    avisos,
+    avisosInternos,
+    avisosIndexacao,
+    avisos: avisosInternos + avisosIndexacao,
     erros: index.erros.length,
     totalEntidades:
       index.consciencias.length +
@@ -54,6 +82,21 @@ export function construirResumo(index: ContrariusIndex): ContrariusDashboardResu
       index.lugares.length +
       index.relacoes.length,
   };
+}
+
+function diagnosticFromWarning(warning: IndexWarning): ContrariusDiagnostico {
+  return { nivel: 'aviso', ...warning };
+}
+
+function diagnosticFromError(error: IndexError): ContrariusDiagnostico {
+  return { nivel: 'erro', ...error };
+}
+
+export function construirDiagnosticos(index: ContrariusIndex): readonly ContrariusDiagnostico[] {
+  return [
+    ...index.erros.map(diagnosticFromError),
+    ...index.avisosIndexacao.map(diagnosticFromWarning),
+  ];
 }
 
 export function agruparRetrovidasPorConsciencia(
@@ -90,28 +133,41 @@ function includesQuery(values: readonly string[], query: string): boolean {
   return values.some((value) => normalizeSearchText(value).includes(query));
 }
 
+function matchesNatureza(
+  item: { naturezaConsciencial: NaturezaConsciencial },
+  filter: FiltroNaturezaConsciencial,
+): boolean {
+  if (filter === 'todas') return true;
+  if (filter === 'humanas') return item.naturezaConsciencial === 'humana';
+  return item.naturezaConsciencial === 'pre-humana';
+}
+
 export function filtrarConsciencias(
   items: readonly Consciencia[],
   query: string,
+  natureza: FiltroNaturezaConsciencial = 'todas',
 ): readonly Consciencia[] {
   const q = normalizeSearchText(query);
-  if (q === '') return items;
+  if (q === '' && natureza === 'todas') return items;
   return items.filter((item) =>
-    includesQuery(
+    matchesNatureza(item, natureza) &&
+    (q === '' || includesQuery(
       [item.id, item.nome, item.identExtraf, ...item.nucleoGeo, ...item.grupocarma],
       q,
-    ),
+    )),
   );
 }
 
 export function filtrarRetrovidas(
   items: readonly Retrovida[],
   query: string,
+  natureza: FiltroNaturezaConsciencial = 'todas',
 ): readonly Retrovida[] {
   const q = normalizeSearchText(query);
-  if (q === '') return items;
+  if (q === '' && natureza === 'todas') return items;
   return items.filter((item) =>
-    includesQuery(
+    matchesNatureza(item, natureza) &&
+    (q === '' || includesQuery(
       [
         item.id,
         item.conscId,
@@ -122,7 +178,7 @@ export function filtrarRetrovidas(
         ...item.livro,
       ],
       q,
-    ),
+    )),
   );
 }
 
