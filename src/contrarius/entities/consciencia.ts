@@ -14,9 +14,11 @@ export function normalizarConsciencia(
 ): Consciencia {
   const avisos: string[] = [];
   const idExplicito = normStr(frontmatter['id']);
-  const id = idExplicito || extractBasename(filePath);
+  const basename = extractBasename(filePath);
+  const id = idExplicito || basename;
   if (id === '') avisos.push('Não foi possível obter id: propriedade "id" ausente e basename não disponível.');
-  const nome = normStr(frontmatter['nome']);
+  const nomeFromFm = normStr(frontmatter['nome']);
+  const nome = nomeFromFm !== '' ? nomeFromFm : basename;
   if (nome === '') avisos.push('Campo "nome" ausente ou vazio.');
   const identExtrafRaw = primeiroPresente(frontmatter, ['ident_extraf', 'identExtraf']);
   const nucleoGeoRaw = primeiroPresente(frontmatter, ['nucleo_geo', 'nucleoGeo']);

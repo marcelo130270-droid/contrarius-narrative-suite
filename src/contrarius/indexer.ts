@@ -119,6 +119,7 @@ export async function indexarContrarius(
     if (tipoPasta === null && options.incluirForaDasPastas !== true) continue;
 
     let frontmatter: Record<string, unknown> | null;
+    let isProvisional = false;
     try {
       frontmatter = await lerFrontmatter(file, deps);
     } catch (error) {
@@ -130,6 +131,7 @@ export async function indexarContrarius(
 
       if (await podeIndexarComoIncompleta(file, deps)) {
         frontmatter = {};
+        isProvisional = true;
         avisosIndexacao.push({
           filePath: file.path,
           campo: 'frontmatter',
@@ -144,6 +146,7 @@ export async function indexarContrarius(
         continue;
       }
     } else if (tipoPasta !== null && Object.keys(frontmatter).length === 0) {
+      isProvisional = true;
       avisosIndexacao.push({
         filePath: file.path,
         campo: 'frontmatter',
@@ -178,8 +181,8 @@ export async function indexarContrarius(
       switch (identificacao.tipo) {
         case 'consciencia': consciencias.push(normalizarConsciencia(frontmatter, file.path)); break;
         case 'retrovida': retrovidas.push(normalizarRetrovida(frontmatter, file.path)); break;
-        case 'evento': eventos.push(normalizarEvento(frontmatter, file.path)); break;
-        case 'lugar': lugares.push(normalizarLugar(frontmatter, file.path)); break;
+        case 'evento': eventos.push(normalizarEvento(frontmatter, file.path, isProvisional)); break;
+        case 'lugar': lugares.push(normalizarLugar(frontmatter, file.path, isProvisional)); break;
         case 'relacao': relacoes.push(normalizarRelacao(frontmatter, file.path)); break;
       }
     } catch (error) {

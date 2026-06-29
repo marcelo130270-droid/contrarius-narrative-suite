@@ -14,7 +14,8 @@ export function normalizarRetrovida(
   filePath: string,
 ): Retrovida {
   const avisos: string[] = [];
-  const id = normStr(frontmatter['id']) || extractBasename(filePath);
+  const basename = extractBasename(filePath);
+  const id = normStr(frontmatter['id']) || basename;
   if (id === '') avisos.push('Não foi possível obter id: propriedade "id" ausente e basename não disponível.');
   const conscIdRaw = primeiroPresente(frontmatter, ['consc_id', 'consciencia']);
   const conscId = conscIdRaw !== undefined ? normStr(conscIdRaw) : '';
@@ -22,7 +23,8 @@ export function normalizarRetrovida(
   const vida = normStr(frontmatter['vida']);
   if (vida === '') avisos.push('Campo "vida" ausente ou vazio.');
   const nomesRaw = primeiroPresente(frontmatter, ['nomes', 'nome']);
-  const nomes = nomesRaw !== undefined ? normList(nomesRaw) : [];
+  const nomesFromFm = nomesRaw !== undefined ? normList(nomesRaw) : [];
+  const nomes = nomesFromFm.length > 0 ? nomesFromFm : (basename !== '' ? [basename] : []);
   if (nomes.length === 0) avisos.push('Campo "nomes" ausente ou vazio (esperado via nomes ou nome).');
   const nucleoGeoRaw = primeiroPresente(frontmatter, ['nucleo_geo', 'nucleoGeo']);
   const movHistoricoRaw = primeiroPresente(frontmatter, ['mov_historico', 'movHistorico']);

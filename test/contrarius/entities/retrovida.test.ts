@@ -267,11 +267,11 @@ describe('normalizarRetrovida — fixture retrovida-completa.md', () => {
     expect(result.avisos.some((a) => a.includes('vida'))).toBe(true);
   });
 
-  it('40. ausência de nomes produz lista vazia e aviso', () => {
+  it('40. ausência de nomes com basename válido usa o basename e não emite aviso', () => {
     const fm: Record<string, unknown> = { consc_id: 'C-001', vida: 'V01' };
     const result = normalizarRetrovida(fm, 'test/r.md');
-    expect(result.nomes).toEqual([]);
-    expect(result.avisos.some((a) => a.includes('nomes'))).toBe(true);
+    expect(result.nomes).toEqual(['r']);
+    expect(result.avisos.some((a) => a.includes('nomes'))).toBe(false);
   });
 
   it('41. ausência de id e basename válido produz aviso', () => {
@@ -281,12 +281,12 @@ describe('normalizarRetrovida — fixture retrovida-completa.md', () => {
     expect(result.avisos.some((a) => a.includes('id'))).toBe(true);
   });
 
-  it('42. campos ausentes produzem: strings vazias, listas vazias, nascimento null, morte null', () => {
+  it('42. campos ausentes produzem: basename como nomes, strings vazias, nascimento null, morte null', () => {
     const fm: Record<string, unknown> = {};
     const result = normalizarRetrovida(fm, 'test/vazio.md');
     expect(result.conscId).toBe('');
     expect(result.vida).toBe('');
-    expect(result.nomes).toEqual([]);
+    expect(result.nomes).toEqual(['vazio']);
     expect(result.nascimento).toBeNull();
     expect(result.morte).toBeNull();
     expect(result.livro).toEqual([]);
@@ -297,5 +297,44 @@ describe('normalizarRetrovida — fixture retrovida-completa.md', () => {
     expect(result.holopensenes).toEqual([]);
     expect(result.religiao).toEqual([]);
     expect(result.classeSocial).toEqual([]);
+  });
+});
+
+describe('normalizarRetrovida — fallback de basename para nomes (requisitos 5–8)', () => {
+  it('5. Retrovida sem nomes e sem nome usa basename do arquivo como nome de exibição', () => {
+    const result = normalizarRetrovida({}, '03_Retrovidas/C-154_V01_XXX.md');
+    expect(result.nomes).toEqual(['C-154_V01_XXX']);
+  });
+
+  it('6. Retrovida com fallback de basename válido não recebe o aviso genérico de nomes ausentes', () => {
+    const result = normalizarRetrovida({}, '03_Retrovidas/C-154_V01_XXX.md');
+    expect(result.avisos.some((a) => a.includes('nomes'))).toBe(false);
+  });
+
+  it('7. Campo nomes no frontmatter tem precedência sobre o basename', () => {
+    const result = normalizarRetrovida(
+      { nomes: ['Aldric de Montfort'] },
+      '03_Retrovidas/C-154_V01_XXX.md',
+    );
+    expect(result.nomes).toEqual(['Aldric de Montfort']);
+  });
+
+  it('7b. Campo nome singular no frontmatter tem precedência sobre o basename', () => {
+    const result = normalizarRetrovida(
+      { nome: 'Maria Fictícia' },
+      '03_Retrovidas/C-154_V01_XXX.md',
+    );
+    expect(result.nomes).toEqual(['Maria Fictícia']);
+  });
+
+  it('8. O id estável não é alterado pelo fallback de nome', () => {
+    const result = normalizarRetrovida({}, '03_Retrovidas/C-154_V01_XXX.md');
+    expect(result.id).toBe('C-154_V01_XXX');
+  });
+
+  it('aviso de nomes ausente é emitido somente quando o basename também está vazio', () => {
+    const result = normalizarRetrovida({}, '');
+    expect(result.nomes).toEqual([]);
+    expect(result.avisos.some((a) => a.includes('nomes'))).toBe(true);
   });
 });
