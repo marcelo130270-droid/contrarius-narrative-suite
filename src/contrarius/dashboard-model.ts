@@ -323,12 +323,67 @@ export function filtrarRelacoes(items: readonly Relacao[], query: string): reado
   );
 }
 
+export function humanizarTituloTecnico(valorTecnico: string): string {
+  let value = valorTecnico.trim();
+
+  const lastSlash = Math.max(value.lastIndexOf('/'), value.lastIndexOf('\\'));
+  if (lastSlash >= 0) value = value.slice(lastSlash + 1);
+  if (value.toLocaleLowerCase('pt-BR').endsWith('.md')) value = value.slice(0, -3);
+
+  const afterClean = value;
+
+  const retrovidaMatch = /^[CP]-\d+_V\d+_/.exec(value);
+  if (retrovidaMatch !== null) {
+    value = value.slice(retrovidaMatch[0].length);
+  } else {
+    const conscienciaMatch = /^[CP]-\d+_/.exec(value);
+    if (conscienciaMatch !== null) value = value.slice(conscienciaMatch[0].length);
+  }
+
+  value = value.replace(/_/g, ' ');
+  value = value.replace(/([A-Za-zÀ-ÖØ-öø-ÿ])(\d)/g, '$1 $2');
+  value = value.replace(/(\d)([A-Za-zÀ-ÖØ-öø-ÿ])/g, '$1 $2');
+  value = value.replace(/\s+/g, ' ').trim();
+
+  if (value !== '') return value;
+
+  let fallback = afterClean.replace(/_/g, ' ');
+  fallback = fallback.replace(/([A-Za-zÀ-ÖØ-öø-ÿ])(\d)/g, '$1 $2');
+  fallback = fallback.replace(/(\d)([A-Za-zÀ-ÖØ-öø-ÿ])/g, '$1 $2');
+  fallback = fallback.replace(/\s+/g, ' ').trim();
+  return fallback || valorTecnico;
+}
+
+function isTechnicalValue(name: string, item: { id: string; filePath: string }): boolean {
+  const normalized = name.trim().toLocaleLowerCase('pt-BR');
+  if (normalized === '') return true;
+  const fp = item.filePath.replace(/\\/g, '/').trim().toLocaleLowerCase('pt-BR');
+  const fpWithoutExt = fp.endsWith('.md') ? fp.slice(0, -3) : fp;
+  const lastSlash = fp.lastIndexOf('/');
+  const basename = lastSlash >= 0 ? fp.slice(lastSlash + 1) : fp;
+  const basenameWithoutExt = basename.endsWith('.md') ? basename.slice(0, -3) : basename;
+  const id = item.id.trim().toLocaleLowerCase('pt-BR');
+  return (
+    normalized === id
+    || normalized === fp
+    || normalized === fpWithoutExt
+    || normalized === basename
+    || normalized === basenameWithoutExt
+  );
+}
+
 export function nomeConsciencia(item: Consciencia): string {
-  return item.nome.trim() || item.identExtraf.trim() || item.id;
+  const nomeExplicito = item.nome.trim();
+  if (nomeExplicito !== '' && !isTechnicalValue(nomeExplicito, item)) return nomeExplicito;
+  const identExtraf = item.identExtraf.trim();
+  if (identExtraf !== '') return identExtraf;
+  return humanizarTituloTecnico(item.id);
 }
 
 export function nomeRetrovida(item: Retrovida): string {
-  return item.nomes.find((name) => name.trim() !== '') ?? item.id;
+  const primeiros = item.nomes.filter((name) => name.trim() !== '');
+  if (primeiros.length > 0 && !isTechnicalValue(primeiros[0], item)) return primeiros[0];
+  return humanizarTituloTecnico(item.id);
 }
 
 export function nomeEvento(item: Evento): string {
