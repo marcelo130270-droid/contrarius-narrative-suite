@@ -41,7 +41,13 @@ export function voltarDetalhe(
 }
 
 export function temFichaDetalhadaNestaFase(tipo: ContrariusTipoEntidade): boolean {
-  return tipo === 'consciencia' || tipo === 'retrovida';
+  return (
+    tipo === 'consciencia'
+    || tipo === 'retrovida'
+    || tipo === 'evento'
+    || tipo === 'lugar'
+    || tipo === 'relacao'
+  );
 }
 
 export function rotuloTipoEntidade(tipo: ContrariusTipoEntidade): string {

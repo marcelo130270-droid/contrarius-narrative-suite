@@ -18,6 +18,18 @@ function keyR(filePath = '03_Retrovidas/C-001_V01.md'): ContrariusEntityKey {
   return { tipoEntidade: 'retrovida', filePath };
 }
 
+function keyE(filePath = '05_Eventos/E-001.md'): ContrariusEntityKey {
+  return { tipoEntidade: 'evento', filePath };
+}
+
+function keyL(filePath = '06_Lugares/L-001.md'): ContrariusEntityKey {
+  return { tipoEntidade: 'lugar', filePath };
+}
+
+function keyRl(filePath = '04_Relacoes/R-001.md'): ContrariusEntityKey {
+  return { tipoEntidade: 'relacao', filePath };
+}
+
 // 1. Estado inicial vazio
 describe('criarEstadoNavegacaoDetalhe', () => {
   it('retorna currentKey nulo e histórico vazio', () => {
@@ -102,6 +114,82 @@ describe('limpeza para lista', () => {
   });
 });
 
+// 2b. Consciência → Retrovida → Evento (cadeia entre tipos distintos)
+describe('navegarParaDetalhe — Consciência → Retrovida → Evento', () => {
+  it('empilha os dois estados anteriores ao navegar para Evento', () => {
+    const kC = keyC();
+    const kR = keyR();
+    const kE = keyE();
+    const s3 = navegarParaDetalhe(navegarParaDetalhe(abrirDetalheRaiz(kC), kR), kE);
+    expect(s3.currentKey).toEqual(kE);
+    expect(s3.history).toHaveLength(2);
+    expect(s3.history[0]).toEqual(kC);
+    expect(s3.history[1]).toEqual(kR);
+  });
+});
+
+// 3. Evento → Lugar
+describe('navegarParaDetalhe — Evento → Lugar', () => {
+  it('empilha Evento ao navegar para Lugar', () => {
+    const kE = keyE();
+    const kL = keyL();
+    const s2 = navegarParaDetalhe(abrirDetalheRaiz(kE), kL);
+    expect(s2.currentKey).toEqual(kL);
+    expect(s2.history).toHaveLength(1);
+    expect(s2.history[0]).toEqual(kE);
+  });
+});
+
+// 4b. Relação → Consciência
+describe('navegarParaDetalhe — Relação → Consciência', () => {
+  it('empilha Relação ao navegar para Consciência', () => {
+    const kRl = keyRl();
+    const kC = keyC();
+    const s2 = navegarParaDetalhe(abrirDetalheRaiz(kRl), kC);
+    expect(s2.currentKey).toEqual(kC);
+    expect(s2.history).toHaveLength(1);
+    expect(s2.history[0]).toEqual(kRl);
+  });
+});
+
+// 5b. Retorno em histórico de três níveis entre tipos distintos
+describe('voltarDetalhe — retorno em histórico de três níveis entre tipos distintos', () => {
+  it('restaura o segundo nível ao voltar uma vez com histórico de três níveis', () => {
+    const kC = keyC();
+    const kE = keyE();
+    const kL = keyL();
+    const s3 = navegarParaDetalhe(navegarParaDetalhe(abrirDetalheRaiz(kC), kE), kL);
+    const s2 = voltarDetalhe(s3);
+    expect(s2.currentKey).toEqual(kE);
+    expect(s2.history).toHaveLength(1);
+    expect(s2.history[0]).toEqual(kC);
+  });
+
+  it('restaura a raiz ao voltar duas vezes', () => {
+    const kC = keyC();
+    const kE = keyE();
+    const kL = keyL();
+    const s3 = navegarParaDetalhe(navegarParaDetalhe(abrirDetalheRaiz(kC), kE), kL);
+    const s1 = voltarDetalhe(voltarDetalhe(s3));
+    expect(s1.currentKey).toEqual(kC);
+    expect(s1.history).toHaveLength(0);
+  });
+});
+
+// 6b. Voltar à lista limpa pilha de navegação profunda
+describe('Voltar à lista — limpa pilha de navegação profunda', () => {
+  it('criarEstadoNavegacaoDetalhe zera histórico de três níveis', () => {
+    const s3 = navegarParaDetalhe(
+      navegarParaDetalhe(abrirDetalheRaiz(keyC()), keyE()),
+      keyL(),
+    );
+    expect(s3.history).toHaveLength(2);
+    const cleared = criarEstadoNavegacaoDetalhe();
+    expect(cleared.currentKey).toBeNull();
+    expect(cleared.history).toHaveLength(0);
+  });
+});
+
 // 8. Ausência de mutação dos estados e chaves de entrada
 describe('imutabilidade', () => {
   it('não muta o estado de entrada ao navegar', () => {
@@ -141,7 +229,7 @@ describe('imutabilidade', () => {
   });
 });
 
-// 9. Ficha interna apenas para Consciência e Retrovida
+// 9. Ficha interna para os cinco tipos canônicos
 describe('temFichaDetalhadaNestaFase', () => {
   it('retorna true para consciencia', () => {
     expect(temFichaDetalhadaNestaFase('consciencia')).toBe(true);
@@ -151,16 +239,16 @@ describe('temFichaDetalhadaNestaFase', () => {
     expect(temFichaDetalhadaNestaFase('retrovida')).toBe(true);
   });
 
-  it('retorna false para evento', () => {
-    expect(temFichaDetalhadaNestaFase('evento')).toBe(false);
+  it('retorna true para evento', () => {
+    expect(temFichaDetalhadaNestaFase('evento')).toBe(true);
   });
 
-  it('retorna false para lugar', () => {
-    expect(temFichaDetalhadaNestaFase('lugar')).toBe(false);
+  it('retorna true para lugar', () => {
+    expect(temFichaDetalhadaNestaFase('lugar')).toBe(true);
   });
 
-  it('retorna false para relacao', () => {
-    expect(temFichaDetalhadaNestaFase('relacao')).toBe(false);
+  it('retorna true para relacao', () => {
+    expect(temFichaDetalhadaNestaFase('relacao')).toBe(true);
   });
 });
 
