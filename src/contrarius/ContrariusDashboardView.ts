@@ -39,6 +39,21 @@ import {
   type FiltroNaturezaConsciencial,
   type GrupoDiagnostico,
 } from './dashboard-model';
+import {
+  buildEntityDetail,
+  createEntityKey,
+  type ContrariusRelatedItem,
+  type ContrariusUnresolvedReference,
+} from './entity-details-model';
+import {
+  abrirDetalheRaiz,
+  criarEstadoNavegacaoDetalhe,
+  navegarParaDetalhe,
+  rotuloTipoEntidade,
+  temFichaDetalhadaNestaFase,
+  voltarDetalhe,
+  type ContrariusDetailNavigationState,
+} from './entity-details-view-model';
 
 export const VIEW_TYPE_CONTRARIUS_DASHBOARD = 'contrarius-knowledge-dashboard';
 
@@ -89,6 +104,7 @@ export class ContrariusDashboardView extends ItemView {
   private lastIndexedAt: Date | null = null;
   private refreshTimer: number | null = null;
   private dashboardContentEl: HTMLElement | null = null;
+  private detailNavState: ContrariusDetailNavigationState = criarEstadoNavegacaoDetalhe();
 
   constructor(leaf: WorkspaceLeaf, app: App) {
     super(leaf);
@@ -217,8 +233,20 @@ export class ContrariusDashboardView extends ItemView {
 
     switch (this.activeTab) {
       case 'resumo': this.renderResumo(this.dashboardContentEl, this.currentIndex); break;
-      case 'consciencias': this.renderConsciencias(this.dashboardContentEl, this.currentIndex); break;
-      case 'retrovidas': this.renderRetrovidas(this.dashboardContentEl, this.currentIndex); break;
+      case 'consciencias':
+        if (this.detailNavState.currentKey !== null) {
+          this.renderFicha(this.dashboardContentEl, this.currentIndex);
+        } else {
+          this.renderConsciencias(this.dashboardContentEl, this.currentIndex);
+        }
+        break;
+      case 'retrovidas':
+        if (this.detailNavState.currentKey !== null) {
+          this.renderFicha(this.dashboardContentEl, this.currentIndex);
+        } else {
+          this.renderRetrovidas(this.dashboardContentEl, this.currentIndex);
+        }
+        break;
       case 'eventos': this.renderEventos(this.dashboardContentEl, this.currentIndex); break;
       case 'lugares': this.renderLugares(this.dashboardContentEl, this.currentIndex); break;
       case 'relacoes': this.renderRelacoes(this.dashboardContentEl, this.currentIndex); break;
@@ -314,6 +342,7 @@ export class ContrariusDashboardView extends ItemView {
       });
       button.onclick = () => {
         this.activeTab = tab.id;
+        this.detailNavState = criarEstadoNavegacaoDetalhe();
         this.render();
       };
     }
@@ -402,7 +431,16 @@ export class ContrariusDashboardView extends ItemView {
         ['Núcleos geográficos', joinValues(item.nucleoGeo)],
         ['Grupocarma', joinValues(item.grupocarma)],
       ]);
-      this.renderOpenButton(body, item.filePath);
+      const fichaKeyC = createEntityKey(item);
+      const btnRowC = body.createDiv();
+      applyStyles(btnRowC, { display: 'flex', gap: '8px', marginTop: '10px', flexWrap: 'wrap' });
+      const openBtnC = btnRowC.createEl('button', { text: 'Abrir nota' });
+      openBtnC.onclick = () => { void this.openFile(item.filePath); };
+      const verFichaBtnC = btnRowC.createEl('button', { text: 'Ver ficha' });
+      verFichaBtnC.onclick = () => {
+        this.detailNavState = abrirDetalheRaiz(fichaKeyC);
+        this.render();
+      };
 
       if (lives.length > 0) {
         const heading = body.createEl('h4', { text: 'Retrovidas' });
@@ -435,13 +473,18 @@ export class ContrariusDashboardView extends ItemView {
       return nomeRetrovida(a).localeCompare(nomeRetrovida(b), 'pt-BR');
     });
     for (const item of sorted) {
+      const fichaKeyR = createEntityKey(item);
       this.renderEntityCard(container, nomeRetrovida(item), item.id, item.filePath, [
         ['Consciência', item.conscId || '—'],
         ['Vida', item.vida || '—'],
         ['Período', joinValues(item.periodo)],
         ['Nascimento / morte', `${formatYear(item.nascimento)} / ${formatYear(item.morte)}`],
         ['Livro', joinValues(item.livro)],
-      ], marcadorEntidade(item, item.naturezaConsciencial === 'pre-humana' ? 'Pré-humana' : undefined));
+      ], marcadorEntidade(item, item.naturezaConsciencial === 'pre-humana' ? 'Pré-humana' : undefined),
+      () => {
+        this.detailNavState = abrirDetalheRaiz(fichaKeyR);
+        this.render();
+      });
     }
   }
 
@@ -662,6 +705,7 @@ export class ContrariusDashboardView extends ItemView {
     filePath: string,
     metadata: ReadonlyArray<readonly [string, string]>,
     badge?: string,
+    onVerFicha?: () => void,
   ): void {
     const card = container.createDiv();
     applyStyles(card, this.cardStyles());
@@ -673,7 +717,14 @@ export class ContrariusDashboardView extends ItemView {
     const identifier = card.createDiv({ text: id });
     applyStyles(identifier, { color: 'var(--text-muted)', fontSize: '0.85em', marginBottom: '9px' });
     this.renderMetadata(card, metadata);
-    this.renderOpenButton(card, filePath);
+    const btnRow = card.createDiv();
+    applyStyles(btnRow, { display: 'flex', gap: '8px', marginTop: '10px', flexWrap: 'wrap' });
+    const openBtn = btnRow.createEl('button', { text: 'Abrir nota' });
+    openBtn.onclick = () => { void this.openFile(filePath); };
+    if (onVerFicha !== undefined) {
+      const verBtn = btnRow.createEl('button', { text: 'Ver ficha' });
+      verBtn.onclick = onVerFicha;
+    }
   }
 
 
@@ -747,5 +798,163 @@ export class ContrariusDashboardView extends ItemView {
       return;
     }
     await this.obsidianApp.workspace.getLeaf(false).openFile(file);
+  }
+
+  private renderFicha(container: HTMLElement, index: ContrariusIndex): void {
+    const navState = this.detailNavState;
+    const key = navState.currentKey;
+    if (key === null) return;
+
+    const navRow = container.createDiv();
+    applyStyles(navRow, { display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' });
+
+    if (navState.history.length > 0) {
+      const backBtn = navRow.createEl('button', { text: '← Voltar' });
+      backBtn.onclick = () => {
+        this.detailNavState = voltarDetalhe(this.detailNavState);
+        this.render();
+      };
+    }
+
+    const backToListBtn = navRow.createEl('button', { text: 'Voltar à lista' });
+    backToListBtn.onclick = () => {
+      this.detailNavState = criarEstadoNavegacaoDetalhe();
+      this.render();
+    };
+
+    const detail = buildEntityDetail(index, key);
+
+    if (detail === null) {
+      const msg = container.createDiv({
+        text: 'Esta entidade não está mais disponível no índice. Volte à lista para continuar.',
+      });
+      applyStyles(msg, { color: 'var(--text-muted)', padding: '24px 0' });
+      return;
+    }
+
+    const header = container.createDiv();
+    applyStyles(header, { ...this.cardStyles(), marginBottom: '12px' });
+
+    const typeLabel = header.createSpan({ text: rotuloTipoEntidade(detail.tipoEntidade) });
+    applyStyles(typeLabel, {
+      color: 'var(--text-muted)',
+      fontSize: '0.78em',
+      fontWeight: '600',
+      textTransform: 'uppercase',
+      display: 'block',
+      marginBottom: '4px',
+    });
+
+    const titleEl = header.createEl('h3', { text: detail.title });
+    applyStyles(titleEl, { margin: '0 0 10px' });
+
+    const metaItems: Array<readonly [string, string]> = [];
+    if (detail.id !== undefined) metaItems.push(['ID', detail.id] as const);
+    metaItems.push(['Nota', detail.filePath] as const);
+    this.renderMetadata(header, metaItems);
+
+    if (detail.fields.length > 0) {
+      const fieldsDiv = container.createDiv();
+      applyStyles(fieldsDiv, { ...this.cardStyles(), marginBottom: '12px' });
+      const fieldsHeading = fieldsDiv.createEl('h4', { text: 'Dados' });
+      applyStyles(fieldsHeading, { margin: '0 0 8px' });
+      this.renderMetadata(fieldsDiv, detail.fields.map((f) => [f.label, f.value] as const));
+    }
+
+    for (const section of detail.relatedSections) {
+      const sectionDiv = container.createDiv();
+      applyStyles(sectionDiv, { ...this.cardStyles(), marginBottom: '12px' });
+      const sectionHeading = sectionDiv.createEl('h4', { text: section.label });
+      applyStyles(sectionHeading, { margin: '0 0 8px' });
+      for (const item of section.items) {
+        this.renderRelatedItem(sectionDiv, item);
+      }
+    }
+
+    if (detail.unresolvedReferences.length > 0) {
+      const unresolvedDiv = container.createDiv();
+      applyStyles(unresolvedDiv, {
+        ...this.cardStyles(),
+        marginBottom: '12px',
+        borderLeft: '3px solid var(--text-warning)',
+      });
+      const unresolvedHeading = unresolvedDiv.createEl('h4', { text: 'Referências não resolvidas' });
+      applyStyles(unresolvedHeading, { margin: '0 0 8px' });
+      for (const ref of detail.unresolvedReferences) {
+        this.renderUnresolvedReference(unresolvedDiv, ref);
+      }
+    }
+
+    this.renderOpenButton(container, detail.filePath);
+  }
+
+  private renderRelatedItem(container: HTMLElement, item: ContrariusRelatedItem): void {
+    const row = container.createDiv();
+    applyStyles(row, {
+      display: 'flex',
+      alignItems: 'flex-start',
+      gap: '8px',
+      marginTop: '7px',
+      flexWrap: 'wrap',
+    });
+
+    const info = row.createDiv();
+    applyStyles(info, { flex: '1 1 auto' });
+    const titleSpan = info.createSpan({ text: item.title });
+    applyStyles(titleSpan, { fontWeight: '500' });
+    const typeSpan = info.createSpan({ text: ` · ${rotuloTipoEntidade(item.tipoEntidade)}` });
+    applyStyles(typeSpan, { color: 'var(--text-muted)', fontSize: '0.85em' });
+
+    const btnGroup = row.createDiv();
+    applyStyles(btnGroup, { display: 'flex', gap: '6px', flexShrink: '0' });
+
+    if (temFichaDetalhadaNestaFase(item.tipoEntidade)) {
+      const verBtn = btnGroup.createEl('button', { text: 'Ver ficha' });
+      verBtn.onclick = () => {
+        this.detailNavState = navegarParaDetalhe(this.detailNavState, item.key);
+        this.render();
+      };
+    }
+
+    const openBtn = btnGroup.createEl('button', { text: 'Abrir nota' });
+    openBtn.onclick = () => { void this.openFile(item.filePath); };
+  }
+
+  private renderUnresolvedReference(
+    container: HTMLElement,
+    ref: ContrariusUnresolvedReference,
+  ): void {
+    const row = container.createDiv();
+    applyStyles(row, {
+      marginTop: '8px',
+      paddingTop: '8px',
+      borderTop: '1px solid var(--background-modifier-border)',
+    });
+
+    const statusLabel = ref.status === 'not-found' ? 'Não encontrada' : 'Ambígua';
+    const statusColor = ref.status === 'not-found' ? 'var(--text-error)' : 'var(--text-warning)';
+    const statusSpan = row.createSpan({ text: statusLabel });
+    applyStyles(statusSpan, {
+      fontWeight: '600',
+      color: statusColor,
+      fontSize: '0.78em',
+      textTransform: 'uppercase',
+      marginRight: '8px',
+    });
+
+    const refSpan = row.createSpan({ text: ref.reference });
+    applyStyles(refSpan, { fontFamily: 'var(--font-monospace)', fontSize: '0.9em' });
+
+    if (ref.context.trim() !== '') {
+      const contextDiv = row.createDiv({ text: `Contexto: ${ref.context}` });
+      applyStyles(contextDiv, { color: 'var(--text-muted)', fontSize: '0.85em', marginTop: '3px' });
+    }
+
+    if (ref.status === 'ambiguous' && ref.candidates.length > 0) {
+      const candidatesDiv = row.createDiv();
+      applyStyles(candidatesDiv, { fontSize: '0.85em', color: 'var(--text-muted)', marginTop: '3px' });
+      candidatesDiv.appendText('Candidatos: ');
+      candidatesDiv.appendText(ref.candidates.map((c) => c.title).join(', '));
+    }
   }
 }
