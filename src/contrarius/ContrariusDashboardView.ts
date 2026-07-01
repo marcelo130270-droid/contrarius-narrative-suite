@@ -247,9 +247,27 @@ export class ContrariusDashboardView extends ItemView {
           this.renderRetrovidas(this.dashboardContentEl, this.currentIndex);
         }
         break;
-      case 'eventos': this.renderEventos(this.dashboardContentEl, this.currentIndex); break;
-      case 'lugares': this.renderLugares(this.dashboardContentEl, this.currentIndex); break;
-      case 'relacoes': this.renderRelacoes(this.dashboardContentEl, this.currentIndex); break;
+      case 'eventos':
+        if (this.detailNavState.currentKey !== null) {
+          this.renderFicha(this.dashboardContentEl, this.currentIndex);
+        } else {
+          this.renderEventos(this.dashboardContentEl, this.currentIndex);
+        }
+        break;
+      case 'lugares':
+        if (this.detailNavState.currentKey !== null) {
+          this.renderFicha(this.dashboardContentEl, this.currentIndex);
+        } else {
+          this.renderLugares(this.dashboardContentEl, this.currentIndex);
+        }
+        break;
+      case 'relacoes':
+        if (this.detailNavState.currentKey !== null) {
+          this.renderFicha(this.dashboardContentEl, this.currentIndex);
+        } else {
+          this.renderRelacoes(this.dashboardContentEl, this.currentIndex);
+        }
+        break;
       case 'erros': this.renderDiagnosticos(this.dashboardContentEl, this.currentIndex); break;
     }
   }
@@ -499,13 +517,17 @@ export class ContrariusDashboardView extends ItemView {
       return nomeEvento(a).localeCompare(nomeEvento(b), 'pt-BR');
     });
     for (const item of sorted) {
+      const fichaKeyE = createEntityKey(item);
       this.renderEntityCard(container, nomeEvento(item), item.id, item.filePath, [
         ['Ano de ordem', formatYear(item.anoOrdem)],
         ['Data', item.dataTextual || item.data || item.dataInicio || '—'],
         ['Local', joinValues(item.local)],
         ['Participantes', joinValues(item.participantes)],
         ['Livro', joinValues(item.livro)],
-      ], marcadorEntidade(item));
+      ], marcadorEntidade(item), () => {
+        this.detailNavState = abrirDetalheRaiz(fichaKeyE);
+        this.render();
+      });
     }
   }
 
@@ -515,13 +537,17 @@ export class ContrariusDashboardView extends ItemView {
     if (items.length === 0) return this.renderEmpty(container);
     const sorted = [...items].sort((a, b) => nomeLugar(a).localeCompare(nomeLugar(b), 'pt-BR'));
     for (const item of sorted) {
+      const fichaKeyL = createEntityKey(item);
       this.renderEntityCard(container, nomeLugar(item), item.id, item.filePath, [
         ['Nome atual', item.nomeAtual || '—'],
         ['Nomes históricos', joinValues(item.nomesHistoricos)],
         ['Região atual', item.regiaoAtual || '—'],
         ['País atual', item.paisAtual || '—'],
         ['Coordenadas', item.coordenadasGoogleEarth || item.coordenadas || '—'],
-      ], marcadorEntidade(item));
+      ], marcadorEntidade(item), () => {
+        this.detailNavState = abrirDetalheRaiz(fichaKeyL);
+        this.render();
+      });
     }
   }
 
@@ -531,13 +557,17 @@ export class ContrariusDashboardView extends ItemView {
     if (items.length === 0) return this.renderEmpty(container);
     const sorted = [...items].sort((a, b) => nomeRelacao(a).localeCompare(nomeRelacao(b), 'pt-BR'));
     for (const item of sorted) {
+      const fichaKeyRl = createEntityKey(item);
       this.renderEntityCard(container, nomeRelacao(item), item.id, item.filePath, [
         ['Consciência 1', item.consciencia1 || '—'],
         ['Consciência 2', item.consciencia2 || '—'],
         ['Tipo', joinValues(item.tipoRelacao)],
         ['Intensidade', item.intensidade || '—'],
         ['Estado', item.estado || '—'],
-      ], marcadorEntidade(item));
+      ], marcadorEntidade(item), () => {
+        this.detailNavState = abrirDetalheRaiz(fichaKeyRl);
+        this.render();
+      });
     }
   }
 
