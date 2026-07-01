@@ -336,4 +336,29 @@ describe('entity details model', () => {
     resolveEntityReference(index, 'C-001');
     expect(JSON.stringify(index)).toBe(before);
   });
+
+  it('ficha detalhada de Retrovida usa título humanizado quando não há nome explícito', () => {
+    const r = retrovida({
+      nomes: [],
+      id: 'C-024_V01_Pajem2_de_Roland1',
+      filePath: '03_Retrovidas/C-024_V01_Pajem2_de_Roland1.md',
+    });
+    const index = indexWith({ retrovidas: [r] });
+    const detail = buildEntityDetail(index, createEntityKey(r));
+    expect(detail?.title).toBe('Pajem 2 de Roland 1');
+    expect(detail?.id).toBe('C-024_V01_Pajem2_de_Roland1');
+    expect(detail?.filePath).toBe('03_Retrovidas/C-024_V01_Pajem2_de_Roland1.md');
+  });
+
+  it('ficha detalhada de Retrovida preserva título explícito e ID técnico separadamente', () => {
+    const r = retrovida({
+      nomes: ['Pajem Roland'],
+      id: 'C-024_V01_Pajem2_de_Roland1',
+      filePath: '03_Retrovidas/C-024_V01_Pajem2_de_Roland1.md',
+    });
+    const index = indexWith({ retrovidas: [r] });
+    const detail = buildEntityDetail(index, createEntityKey(r));
+    expect(detail?.title).toBe('Pajem Roland');
+    expect(detail?.id).toBe('C-024_V01_Pajem2_de_Roland1');
+  });
 });

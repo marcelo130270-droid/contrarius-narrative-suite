@@ -11,6 +11,7 @@ import {
   filtrarLugares,
   filtrarRelacoes,
   filtrarRetrovidas,
+  humanizarTituloTecnico,
   nomeConsciencia,
   nomeEvento,
   nomeLugar,
@@ -339,9 +340,9 @@ describe('nomes de exibição', () => {
     expect(nomeConsciencia(consciencia({ nome: '', identExtraf: '' }))).toBe('C-001');
   });
 
-  it('usa primeiro nome não vazio e id para retrovida', () => {
+  it('usa primeiro nome não vazio, e humaniza o ID como fallback para retrovida', () => {
     expect(nomeRetrovida(retrovida({ nomes: ['', 'Nome B'] }))).toBe('Nome B');
-    expect(nomeRetrovida(retrovida({ nomes: [] }))).toBe('C-001_V01');
+    expect(nomeRetrovida(retrovida({ nomes: [] }))).toBe('V 01');
   });
 
   it('usa título e id para evento', () => {
@@ -652,6 +653,146 @@ describe('filtrarGruposDiagnostico', () => {
     const original = [...grupos];
     filtrarGruposDiagnostico(grupos, 'erro', 'a');
     expect(grupos).toEqual(original);
+  });
+});
+
+// ─── humanizarTituloTecnico ───────────────────────────────────────────────────
+
+describe('humanizarTituloTecnico', () => {
+  it('C-024_V01_Pajem2_de_Roland1 → Pajem 2 de Roland 1', () => {
+    expect(humanizarTituloTecnico('C-024_V01_Pajem2_de_Roland1')).toBe('Pajem 2 de Roland 1');
+  });
+
+  it('C-025_V01_Escudeiro_de_Roland → Escudeiro de Roland', () => {
+    expect(humanizarTituloTecnico('C-025_V01_Escudeiro_de_Roland')).toBe('Escudeiro de Roland');
+  });
+
+  it('P-001_V01_Destrier_Babieca → Destrier Babieca', () => {
+    expect(humanizarTituloTecnico('P-001_V01_Destrier_Babieca')).toBe('Destrier Babieca');
+  });
+
+  it('remove prefixo de consciência C-###_', () => {
+    expect(humanizarTituloTecnico('C-034_Bispo_Emerald')).toBe('Bispo Emerald');
+  });
+
+  it('remove prefixo pré-humano P-###_', () => {
+    expect(humanizarTituloTecnico('P-005_Nome_Antigo')).toBe('Nome Antigo');
+  });
+
+  it('insere espaço entre letra e dígito (Pajem2 → Pajem 2)', () => {
+    expect(humanizarTituloTecnico('C-001_V01_Pajem2')).toBe('Pajem 2');
+  });
+
+  it('insere espaço entre dígito e letra (2Pajem → 2 Pajem)', () => {
+    expect(humanizarTituloTecnico('C-001_V01_2Pajem')).toBe('2 Pajem');
+  });
+
+  it('preserva acentos e caixa original', () => {
+    expect(humanizarTituloTecnico('C-001_V01_Cônsul_Ação')).toBe('Cônsul Ação');
+    expect(humanizarTituloTecnico('C-001_V01_del_Castillo')).toBe('del Castillo');
+  });
+
+  it('valor formado apenas pelo código técnico não retorna vazio', () => {
+    expect(humanizarTituloTecnico('C-001')).toBe('C-001');
+    expect(humanizarTituloTecnico('C-001_V01_')).not.toBe('');
+  });
+
+  it('remove caminho e extensão .md antes de processar', () => {
+    expect(humanizarTituloTecnico('03_Retrovidas/C-024_V01_Pajem2_de_Roland1.md')).toBe('Pajem 2 de Roland 1');
+    expect(humanizarTituloTecnico('03_Retrovidas/C-025_V01_Escudeiro_de_Roland.md')).toBe('Escudeiro de Roland');
+  });
+
+  it('é determinístico e não modifica a entrada', () => {
+    const input = 'C-024_V01_Pajem2_de_Roland1';
+    const original = input;
+    const r1 = humanizarTituloTecnico(input);
+    const r2 = humanizarTituloTecnico(input);
+    expect(input).toBe(original);
+    expect(r1).toBe(r2);
+    expect(r1).toBe('Pajem 2 de Roland 1');
+  });
+});
+
+// ─── nomes de exibição — detecção de fallback técnico ────────────────────────
+
+describe('nomes de exibição — detecção de fallback técnico', () => {
+  it('nome explícito Bispo Emerald é preservado sem reformatação', () => {
+    const c = consciencia({
+      nome: 'Bispo Emerald',
+      id: 'C-034_V01_Bispo_Emerald',
+      filePath: '02_Consciencias/C-034_V01_Bispo_Emerald.md',
+    });
+    expect(nomeConsciencia(c)).toBe('Bispo Emerald');
+  });
+
+  it('primeiro item humano de nomes é preservado sem reformatação', () => {
+    const r = retrovida({ nomes: ['Ana de Almeida', 'Outro Nome'] });
+    expect(nomeRetrovida(r)).toBe('Ana de Almeida');
+  });
+
+  it('nome igual ao ID é tratado como fallback técnico', () => {
+    const c = consciencia({
+      nome: 'C-001',
+      id: 'C-001',
+      filePath: '02_Consciencias/C-001.md',
+      identExtraf: 'Aris',
+    });
+    expect(nomeConsciencia(c)).toBe('Aris');
+  });
+
+  it('nomes[0] igual ao ID é tratado como fallback técnico e humanizado', () => {
+    const r = retrovida({
+      nomes: ['C-001_V01'],
+      id: 'C-001_V01',
+      filePath: '03_Retrovidas/C-001_V01.md',
+    });
+    expect(nomeRetrovida(r)).toBe('V 01');
+  });
+
+  it('nomes[0] igual ao caminho completo é tratado como fallback técnico', () => {
+    const r = retrovida({
+      nomes: ['03_Retrovidas/C-001_V01.md'],
+      id: 'C-001_V01',
+      filePath: '03_Retrovidas/C-001_V01.md',
+    });
+    expect(nomeRetrovida(r)).toBe('V 01');
+  });
+
+  it('nomes[0] igual ao basename com extensão .md é tratado como fallback técnico', () => {
+    const r = retrovida({
+      nomes: ['C-001_V01.md'],
+      id: 'C-001_V01',
+      filePath: '03_Retrovidas/C-001_V01.md',
+    });
+    expect(nomeRetrovida(r)).toBe('V 01');
+  });
+
+  it('comparação de fallback ignora diferenças de caixa', () => {
+    const r = retrovida({
+      nomes: ['c-001_v01'],
+      id: 'C-001_V01',
+      filePath: '03_Retrovidas/C-001_V01.md',
+    });
+    expect(nomeRetrovida(r)).toBe('V 01');
+  });
+
+  it('ID e filePath das entidades não são modificados após chamada dos nomes', () => {
+    const r = retrovida({ nomes: [], id: 'C-001_V01', filePath: '03_Retrovidas/C-001_V01.md' });
+    nomeRetrovida(r);
+    expect(r.id).toBe('C-001_V01');
+    expect(r.filePath).toBe('03_Retrovidas/C-001_V01.md');
+
+    const c = consciencia({ nome: '', identExtraf: '', id: 'C-001', filePath: '02_Consciencias/C-001.md' });
+    nomeConsciencia(c);
+    expect(c.id).toBe('C-001');
+    expect(c.filePath).toBe('02_Consciencias/C-001.md');
+  });
+
+  it('não muta a entidade recebida', () => {
+    const r = retrovida({ nomes: Object.freeze(['C-001_V01']) as readonly string[] });
+    const before = JSON.stringify(r);
+    nomeRetrovida(r);
+    expect(JSON.stringify(r)).toBe(before);
   });
 });
 
