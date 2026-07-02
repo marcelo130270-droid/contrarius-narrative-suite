@@ -18,6 +18,21 @@ import type {
   Retrovida,
 } from './types';
 import {
+  construirCronologiaDupla,
+  type CronologiaDuplaContrarius,
+  type ModoCronologiaContrarius,
+  type ProblemaCronologiaContrarius,
+} from './timeline-model';
+import {
+  construirVisaoCronologia,
+  rotuloProblemaCronologia,
+  TODOS_OS_LIVROS_CRONOLOGIA,
+  type FiltroVisaoCronologia,
+  type LinhaCronologiaContrarius,
+  type OpcaoLivroCronologia,
+  type VisaoCronologiaContrarius,
+} from './timeline-view-model';
+import {
   agruparDiagnosticos,
   agruparRetrovidasPorConsciencia,
   construirDiagnosticos,
@@ -42,6 +57,7 @@ import {
 import {
   buildEntityDetail,
   createEntityKey,
+  type ContrariusEntityKey,
   type ContrariusRelatedItem,
   type ContrariusUnresolvedReference,
 } from './entity-details-model';
@@ -62,6 +78,7 @@ const TAB_LABELS: ReadonlyArray<{ id: ContrariusDashboardTab; label: string }> =
   { id: 'consciencias', label: 'Consciências' },
   { id: 'retrovidas', label: 'Retrovidas' },
   { id: 'eventos', label: 'Eventos' },
+  { id: 'cronologia', label: 'Cronologia' },
   { id: 'lugares', label: 'Lugares' },
   { id: 'relacoes', label: 'Relações' },
   { id: 'erros', label: 'Diagnóstico' },
@@ -96,10 +113,13 @@ function marcadorEntidade(item: ContrariusBase, marcadorExistente?: string): str
 export class ContrariusDashboardView extends ItemView {
   private readonly obsidianApp: App;
   private currentIndex: ContrariusIndex | null = null;
+  private currentCronologia: CronologiaDuplaContrarius | null = null;
   private activeTab: ContrariusDashboardTab = 'resumo';
   private query = '';
   private naturezaFilter: FiltroNaturezaConsciencial = 'todas';
   private diagnosticFilter: FiltroDiagnostico = 'todos';
+  private cronologiaMode: ModoCronologiaContrarius = 'cronologica';
+  private cronologiaLivro: string = TODOS_OS_LIVROS_CRONOLOGIA;
   private loading = false;
   private lastIndexedAt: Date | null = null;
   private refreshTimer: number | null = null;
@@ -192,6 +212,7 @@ export class ContrariusDashboardView extends ItemView {
         cachedRead: (file) => this.obsidianApp.vault.cachedRead(file),
         parseYaml,
       });
+      this.currentCronologia = construirCronologiaDupla(this.currentIndex);
       this.lastIndexedAt = new Date();
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -252,6 +273,16 @@ export class ContrariusDashboardView extends ItemView {
           this.renderFicha(this.dashboardContentEl, this.currentIndex);
         } else {
           this.renderEventos(this.dashboardContentEl, this.currentIndex);
+        }
+        break;
+      case 'cronologia':
+        if (this.detailNavState.currentKey !== null) {
+          this.renderFicha(this.dashboardContentEl, this.currentIndex);
+        } else if (this.currentCronologia !== null) {
+          this.renderCronologia(this.dashboardContentEl, this.currentCronologia);
+        } else {
+          const semCron = this.dashboardContentEl.createDiv({ text: 'Cronologia não disponível.' });
+          applyStyles(semCron, { color: 'var(--text-muted)', padding: '24px 0' });
         }
         break;
       case 'lugares':
@@ -985,6 +1016,266 @@ export class ContrariusDashboardView extends ItemView {
       applyStyles(candidatesDiv, { fontSize: '0.85em', color: 'var(--text-muted)', marginTop: '3px' });
       candidatesDiv.appendText('Candidatos: ');
       candidatesDiv.appendText(ref.candidates.map((c) => c.title).join(', '));
+    }
+  }
+
+  // ─── Cronologia ─────────────────────────────────────────────────────────────
+
+  private renderCronologia(container: HTMLElement, cronologia: CronologiaDuplaContrarius): void {
+    const livros = construirVisaoCronologia(cronologia, {
+      modo: this.cronologiaMode,
+      livro: TODOS_OS_LIVROS_CRONOLOGIA,
+      consulta: '',
+    }).livros;
+
+    const livroExiste = livros.some((l) => l.chave === this.cronologiaLivro);
+    if (!livroExiste) this.cronologiaLivro = TODOS_OS_LIVROS_CRONOLOGIA;
+
+    const filtro: FiltroVisaoCronologia = {
+      modo: this.cronologiaMode,
+      livro: this.cronologiaLivro,
+      consulta: this.query,
+    };
+    const visao = construirVisaoCronologia(cronologia, filtro);
+
+    this.renderCronologiaModeBar(container);
+    this.renderCronologiaLivroSelector(container, visao.livros);
+    this.renderCronologiaSummary(container, visao);
+    this.renderSectionTitle(container, 'Cronologia', visao.totalVisivel);
+
+    if (visao.totalAntesDosFiltros === 0) {
+      const msg = container.createDiv({ text: 'Nenhum Evento indexado.' });
+      applyStyles(msg, { color: 'var(--text-muted)', padding: '12px 0' });
+      return;
+    }
+
+    if (visao.totalVisivel === 0) {
+      const msg = container.createDiv({ text: 'Nenhum resultado para o filtro e busca atuais.' });
+      applyStyles(msg, { color: 'var(--text-muted)', padding: '12px 0' });
+    }
+
+    this.renderCronologiaPosicionados(container, visao);
+    this.renderCronologiaNaoPosicionados(container, visao);
+
+    if (visao.problemas.length > 0) {
+      this.renderCronologiaProblemas(container, visao.problemas);
+    }
+  }
+
+  private renderCronologiaModeBar(container: HTMLElement): void {
+    const bar = container.createDiv();
+    applyStyles(bar, { display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '12px' });
+
+    const options: ReadonlyArray<[ModoCronologiaContrarius, string]> = [
+      ['cronologica', 'Cronológica'],
+      ['narrativa', 'Narrativa'],
+    ];
+    for (const [mode, label] of options) {
+      const active = this.cronologiaMode === mode;
+      const btn = bar.createEl('button', { text: label });
+      btn.setAttr('aria-pressed', String(active));
+      applyStyles(btn, {
+        background: active ? 'var(--interactive-accent)' : '',
+        color: active ? 'var(--text-on-accent)' : '',
+      });
+      btn.onclick = () => {
+        this.cronologiaMode = mode;
+        this.render();
+      };
+    }
+  }
+
+  private renderCronologiaLivroSelector(
+    container: HTMLElement,
+    livros: readonly OpcaoLivroCronologia[],
+  ): void {
+    const wrapper = container.createDiv();
+    applyStyles(wrapper, {
+      display: 'flex',
+      gap: '8px',
+      alignItems: 'center',
+      marginBottom: '12px',
+      flexWrap: 'wrap',
+    });
+
+    const label = wrapper.createEl('label', { text: 'Livro:' });
+    applyStyles(label, { color: 'var(--text-muted)', fontSize: '0.92em' });
+
+    const select = wrapper.createEl('select');
+    for (const opcao of livros) {
+      const option = select.createEl('option', {
+        text: `${opcao.rotulo} (${opcao.quantidade})`,
+        value: opcao.chave,
+      });
+      if (opcao.chave === this.cronologiaLivro) option.selected = true;
+    }
+    select.onchange = () => {
+      this.cronologiaLivro = select.value;
+      this.render();
+    };
+  }
+
+  private renderCronologiaSummary(
+    container: HTMLElement,
+    visao: VisaoCronologiaContrarius,
+  ): void {
+    const bar = container.createDiv();
+    applyStyles(bar, {
+      display: 'flex',
+      gap: '16px',
+      marginBottom: '12px',
+      padding: '8px 12px',
+      background: 'var(--background-secondary)',
+      borderRadius: '6px',
+      fontSize: '0.88em',
+      color: 'var(--text-muted)',
+      flexWrap: 'wrap',
+    });
+    const pairs: ReadonlyArray<[string, number]> = [
+      ['Posicionados', visao.posicionados.length],
+      ['Não posicionados', visao.naoPosicionados.length],
+      ['Problemas visíveis', visao.problemas.length],
+    ];
+    for (const [rotulo, count] of pairs) {
+      const item = bar.createSpan();
+      item.createEl('strong', { text: String(count) });
+      item.appendText(` ${rotulo}`);
+    }
+  }
+
+  private renderCronologiaPosicionados(
+    container: HTMLElement,
+    visao: VisaoCronologiaContrarius,
+  ): void {
+    if (visao.posicionados.length === 0 && visao.totalVisivel > 0) {
+      const msg = container.createDiv({ text: 'Nenhum evento posicionado nos filtros atuais.' });
+      applyStyles(msg, { color: 'var(--text-muted)', padding: '8px 0' });
+      return;
+    }
+    for (const linha of visao.posicionados) {
+      this.renderCronologiaCard(container, linha);
+    }
+  }
+
+  private renderCronologiaNaoPosicionados(
+    container: HTMLElement,
+    visao: VisaoCronologiaContrarius,
+  ): void {
+    if (visao.naoPosicionados.length === 0) return;
+
+    const heading = container.createEl('h4', { text: `Não posicionados (${visao.naoPosicionados.length})` });
+    applyStyles(heading, {
+      marginTop: '20px',
+      marginBottom: '8px',
+      paddingBottom: '6px',
+      borderBottom: '1px solid var(--background-modifier-border)',
+    });
+
+    for (const linha of visao.naoPosicionados) {
+      this.renderCronologiaCard(container, linha);
+    }
+  }
+
+  private renderCronologiaCard(container: HTMLElement, linha: LinhaCronologiaContrarius): void {
+    const { item, posicao, rotuloTemporal, rotuloContexto } = linha;
+
+    const card = container.createDiv();
+    applyStyles(card, { ...this.cardStyles(), position: 'relative' });
+
+    const posEl = card.createSpan({ text: `#${posicao}` });
+    applyStyles(posEl, {
+      position: 'absolute',
+      top: '12px',
+      right: '12px',
+      color: 'var(--text-faint)',
+      fontSize: '0.78em',
+      fontWeight: '600',
+    });
+
+    const titleEl = card.createEl('h4', { text: item.titulo });
+    applyStyles(titleEl, { margin: '0 0 3px', paddingRight: '36px' });
+
+    const idEl = card.createDiv({ text: item.id });
+    applyStyles(idEl, { color: 'var(--text-muted)', fontSize: '0.85em', marginBottom: '8px' });
+
+    const metaPairs: ReadonlyArray<[string, string]> = rotuloContexto !== ''
+      ? [['Quando', rotuloTemporal], ['Contexto', rotuloContexto]]
+      : [['Quando', rotuloTemporal]];
+    this.renderMetadata(card, metaPairs);
+
+    const btnRow = card.createDiv();
+    applyStyles(btnRow, { display: 'flex', gap: '8px', marginTop: '10px', flexWrap: 'wrap' });
+
+    const openBtn = btnRow.createEl('button', { text: 'Abrir nota' });
+    openBtn.onclick = () => { void this.openFile(item.filePath); };
+
+    const verBtn = btnRow.createEl('button', { text: 'Ver ficha' });
+    verBtn.onclick = () => {
+      const key: ContrariusEntityKey = { tipoEntidade: 'evento', filePath: item.filePath };
+      this.detailNavState = abrirDetalheRaiz(key);
+      this.render();
+    };
+  }
+
+  private renderCronologiaProblemas(
+    container: HTMLElement,
+    problemas: readonly ProblemaCronologiaContrarius[],
+  ): void {
+    const details = container.createEl('details');
+    applyStyles(details, { ...this.cardStyles(), marginTop: '16px' });
+
+    const summary = details.createEl('summary');
+    applyStyles(summary, { cursor: 'pointer', fontWeight: '600' });
+    summary.appendText(`Problemas detectados (${problemas.length})`);
+
+    const body = details.createDiv();
+    applyStyles(body, { paddingTop: '10px' });
+
+    let lastCodigo = '';
+    for (const problema of problemas) {
+      if (problema.codigo !== lastCodigo) {
+        lastCodigo = problema.codigo;
+        const groupHeading = body.createEl('h5', {
+          text: rotuloProblemaCronologia(problema.codigo),
+        });
+        applyStyles(groupHeading, { margin: '12px 0 4px', color: 'var(--text-muted)', fontSize: '0.85em' });
+      }
+
+      const row = body.createDiv();
+      const isError = problema.nivel === 'erro';
+      applyStyles(row, {
+        marginTop: '6px',
+        padding: '8px 10px',
+        borderRadius: '6px',
+        borderLeft: `3px solid ${isError ? 'var(--text-error)' : 'var(--text-warning)'}`,
+        background: 'var(--background-primary)',
+      });
+
+      const nivelSpan = row.createSpan({
+        text: isError ? 'Erro' : 'Aviso',
+      });
+      applyStyles(nivelSpan, {
+        fontSize: '0.72em',
+        fontWeight: '600',
+        textTransform: 'uppercase',
+        color: isError ? 'var(--text-error)' : 'var(--text-warning)',
+        marginRight: '8px',
+      });
+
+      row.appendText(problema.mensagem);
+
+      const metaDiv = row.createDiv();
+      applyStyles(metaDiv, { marginTop: '4px', fontSize: '0.85em', color: 'var(--text-muted)' });
+      metaDiv.appendText(`Evento: ${problema.eventoId}`);
+      if (problema.relacionados.length > 0) {
+        metaDiv.appendText(` · Relacionados: ${problema.relacionados.join(', ')}`);
+      }
+
+      if (problema.filePath !== '') {
+        const openBtn = row.createEl('button', { text: 'Abrir nota' });
+        applyStyles(openBtn, { marginTop: '6px', fontSize: '0.85em' });
+        openBtn.onclick = () => { void this.openFile(problema.filePath); };
+      }
     }
   }
 }
