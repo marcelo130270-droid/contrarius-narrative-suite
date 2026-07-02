@@ -9,7 +9,8 @@ const CAMPOS_CONHECIDOS = new Set([
   'status', 'local', 'nucleo_geo', 'nucleoGeo', 'participantes', 'retrovidas',
   'grupocarma', 'grupo_karmico', 'holopensenes', 'religiao', 'mov_historico',
   'movHistorico', 'eventos_anteriores', 'eventosAnteriores', 'eventos_posteriores',
-  'eventosPosteriores', 'livro', 'fontes', 'tags',
+  'eventosPosteriores', 'ordem_narrativa', 'ordemNarrativa', 'capitulo', 'capítulo',
+  'cena', 'livro', 'fontes', 'tags',
 ]);
 
 export function normalizarEvento(
@@ -38,6 +39,8 @@ export function normalizarEvento(
   const movHistoricoRaw = primeiroPresente(frontmatter, ['mov_historico', 'movHistorico']);
   const anterioresRaw = primeiroPresente(frontmatter, ['eventos_anteriores', 'eventosAnteriores']);
   const posterioresRaw = primeiroPresente(frontmatter, ['eventos_posteriores', 'eventosPosteriores']);
+  const ordemNarrativaRaw = primeiroPresente(frontmatter, ['ordem_narrativa', 'ordemNarrativa']);
+  const capituloRaw = primeiroPresente(frontmatter, ['capitulo', 'capítulo']);
 
   const frontmatterRaw = deepCopyYaml(frontmatter) as Record<string, unknown>;
   const camposDesconhecidos: Record<string, unknown> = {};
@@ -68,6 +71,9 @@ export function normalizarEvento(
     movHistorico: movHistoricoRaw !== undefined ? normList(movHistoricoRaw) : [],
     eventosAnteriores: anterioresRaw !== undefined ? normList(anterioresRaw) : [],
     eventosPosteriores: posterioresRaw !== undefined ? normList(posterioresRaw) : [],
+    ordemNarrativa: ordemNarrativaRaw !== undefined ? normNum(ordemNarrativaRaw) : null,
+    capitulo: capituloRaw !== undefined ? normStr(capituloRaw) : '',
+    cena: normStr(frontmatter['cena']),
     livro: normList(frontmatter['livro']),
     fontes: normList(frontmatter['fontes']),
     tags: normList(frontmatter['tags']),

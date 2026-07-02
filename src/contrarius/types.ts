@@ -90,6 +90,9 @@ export interface Evento extends ContrariusBase {
   movHistorico: readonly string[];
   eventosAnteriores: readonly string[];
   eventosPosteriores: readonly string[];
+  ordemNarrativa: number | null;
+  capitulo: string;
+  cena: string;
   livro: readonly string[];
   fontes: readonly string[];
   tags: readonly string[];

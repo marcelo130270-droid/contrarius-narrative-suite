@@ -230,5 +230,91 @@ describe('normalizarEvento — não destrutividade', () => {
     expect(result.periodo).toEqual([]);
     expect(result.local).toEqual([]);
     expect(result.fontes).toEqual([]);
+    expect(result.ordemNarrativa).toBeNull();
+    expect(result.capitulo).toBe('');
+    expect(result.cena).toBe('');
+  });
+});
+
+describe('normalizarEvento — campos narrativos', () => {
+  it('lê ordemNarrativa via alias ordem_narrativa', () => {
+    expect(normalizarEvento({ titulo: 'x', ordem_narrativa: 3 }, '05_Eventos/E.md').ordemNarrativa).toBe(3);
+  });
+
+  it('lê ordemNarrativa via alias ordemNarrativa', () => {
+    expect(normalizarEvento({ titulo: 'x', ordemNarrativa: '7' }, '05_Eventos/E.md').ordemNarrativa).toBe(7);
+  });
+
+  it('retorna null para ordemNarrativa inválida', () => {
+    expect(normalizarEvento({ titulo: 'x', ordemNarrativa: 'abc' }, '05_Eventos/E.md').ordemNarrativa).toBeNull();
+  });
+
+  it('retorna null para ordemNarrativa ausente', () => {
+    expect(normalizarEvento({ titulo: 'x' }, '05_Eventos/E.md').ordemNarrativa).toBeNull();
+  });
+
+  it('dá precedência a ordem_narrativa sobre ordemNarrativa', () => {
+    expect(normalizarEvento({ titulo: 'x', ordem_narrativa: 1, ordemNarrativa: 2 }, '05_Eventos/E.md').ordemNarrativa).toBe(1);
+  });
+
+  it('lê capitulo via alias capitulo', () => {
+    expect(normalizarEvento({ titulo: 'x', capitulo: 'Cap I' }, '05_Eventos/E.md').capitulo).toBe('Cap I');
+  });
+
+  it('lê capitulo via alias capítulo (com acento)', () => {
+    expect(normalizarEvento({ titulo: 'x', 'capítulo': 'Prólogo' }, '05_Eventos/E.md').capitulo).toBe('Prólogo');
+  });
+
+  it('dá precedência a capitulo sobre capítulo', () => {
+    expect(normalizarEvento({ titulo: 'x', capitulo: 'A', 'capítulo': 'B' }, '05_Eventos/E.md').capitulo).toBe('A');
+  });
+
+  it('retorna string vazia para capitulo ausente', () => {
+    expect(normalizarEvento({ titulo: 'x' }, '05_Eventos/E.md').capitulo).toBe('');
+  });
+
+  it('lê cena', () => {
+    expect(normalizarEvento({ titulo: 'x', cena: 'Cena 3' }, '05_Eventos/E.md').cena).toBe('Cena 3');
+  });
+
+  it('retorna string vazia para cena ausente', () => {
+    expect(normalizarEvento({ titulo: 'x' }, '05_Eventos/E.md').cena).toBe('');
+  });
+
+  it('não emite aviso pela ausência de ordemNarrativa, capitulo ou cena', () => {
+    const avisos = normalizarEvento({ titulo: 'x' }, '05_Eventos/E.md').avisos.join(' ').toLowerCase();
+    expect(avisos).not.toContain('ordem');
+    expect(avisos).not.toContain('capitulo');
+    expect(avisos).not.toContain('cena');
+  });
+
+  it('não inclui ordem_narrativa, ordemNarrativa, capitulo, capítulo e cena em camposDesconhecidos', () => {
+    const result = normalizarEvento({
+      titulo: 'x',
+      ordem_narrativa: 1,
+      ordemNarrativa: 2,
+      capitulo: 'A',
+      'capítulo': 'B',
+      cena: 'C',
+    }, '05_Eventos/E.md');
+    expect(result.camposDesconhecidos).not.toHaveProperty('ordem_narrativa');
+    expect(result.camposDesconhecidos).not.toHaveProperty('ordemNarrativa');
+    expect(result.camposDesconhecidos).not.toHaveProperty('capitulo');
+    expect(result.camposDesconhecidos).not.toHaveProperty('capítulo');
+    expect(result.camposDesconhecidos).not.toHaveProperty('cena');
+  });
+
+  it('preserva ordemNarrativa e capitulo em frontmatterRaw', () => {
+    const result = normalizarEvento({ titulo: 'x', ordem_narrativa: 5, capitulo: 'C1', cena: 'S1' }, '05_Eventos/E.md');
+    expect(result.frontmatterRaw).toHaveProperty('ordem_narrativa', 5);
+    expect(result.frontmatterRaw).toHaveProperty('capitulo', 'C1');
+    expect(result.frontmatterRaw).toHaveProperty('cena', 'S1');
+  });
+
+  it('não modifica o objeto de entrada ao adicionar campos narrativos', () => {
+    const source = { titulo: 'x', ordemNarrativa: 1, capitulo: 'C', cena: 'S' };
+    const snapshot = JSON.stringify(source);
+    normalizarEvento(source, '05_Eventos/E.md');
+    expect(JSON.stringify(source)).toBe(snapshot);
   });
 });
