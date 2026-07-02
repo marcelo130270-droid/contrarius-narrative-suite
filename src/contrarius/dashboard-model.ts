@@ -16,6 +16,7 @@ export type ContrariusDashboardTab =
   | 'consciencias'
   | 'retrovidas'
   | 'eventos'
+  | 'cronologia'
   | 'lugares'
   | 'relacoes'
   | 'erros';
