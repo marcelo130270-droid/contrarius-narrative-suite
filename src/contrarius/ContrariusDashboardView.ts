@@ -101,6 +101,7 @@ import {
   type ArmazenamentoNotasNarrativas,
   type DescricaoErroSalvamentoNarrativo,
 } from './narrative-order-write-service';
+import { adicionarFrontmatterMinimoEvento } from './evento-frontmatter-scaffold';
 
 export const VIEW_TYPE_CONTRARIUS_DASHBOARD = 'contrarius-knowledge-dashboard';
 
@@ -166,6 +167,7 @@ export class ContrariusDashboardView extends ItemView {
   private narrativaRenumPasso = 10;
   private narrativaVisualizacao: 'lista' | 'roteiro' = 'lista';
   private narrativaErroPreparacao: DescricaoErroSalvamentoNarrativo | null = null;
+  private narrativaErroScaffold: string | null = null;
 
   constructor(leaf: WorkspaceLeaf, app: App) {
     super(leaf);
@@ -1452,6 +1454,7 @@ export class ContrariusDashboardView extends ItemView {
     this.narrativaOcupado = false;
     this.narrativaVaultMudou = false;
     this.narrativaErroPreparacao = null;
+    this.narrativaErroScaffold = null;
     this.narrativaOrdemBruta.clear();
     this.render();
   }
@@ -1464,6 +1467,7 @@ export class ContrariusDashboardView extends ItemView {
     this.narrativaOcupado = false;
     this.narrativaVaultMudou = false;
     this.narrativaErroPreparacao = null;
+    this.narrativaErroScaffold = null;
     this.narrativaOrdemBruta.clear();
     if (reindexar) {
       void this.reindex();
@@ -2060,6 +2064,34 @@ export class ContrariusDashboardView extends ItemView {
       errBox.createDiv({ text: errDesc.mensagem });
       const errAcao = errBox.createDiv({ text: errDesc.acaoSugerida });
       applyStyles(errAcao, { marginTop: '4px', fontSize: '0.88em', color: 'var(--text-muted)' });
+
+      if (errDesc.codigoCausa === 'frontmatter_ausente') {
+        const scaffoldFilePath = errDesc.filePath.replace(/\\/g, '/');
+        const itemFalhado = this.narrativaPlano!.itens.find(
+          (i) => i.filePath.replace(/\\/g, '/') === scaffoldFilePath,
+        );
+        if (itemFalhado !== undefined && itemFalhado.id.trim() !== '' && itemFalhado.titulo.trim() !== '') {
+          const scaffoldDiv = errBox.createDiv();
+          applyStyles(scaffoldDiv, {
+            marginTop: '10px',
+            paddingTop: '10px',
+            borderTop: '1px solid var(--background-modifier-border)',
+          });
+          const scaffoldBtn = scaffoldDiv.createEl('button', { text: 'Adicionar frontmatter mínimo' });
+          scaffoldBtn.disabled = this.narrativaOcupado;
+          const scaffoldDesc = scaffoldDiv.createDiv({
+            text: 'A nota será estruturada com campos vazios, sem datas, livro ou participantes inventados.',
+          });
+          applyStyles(scaffoldDesc, { fontSize: '0.85em', color: 'var(--text-muted)', marginTop: '4px' });
+          if (this.narrativaErroScaffold !== null) {
+            const scaffoldErrDiv = scaffoldDiv.createDiv({ text: this.narrativaErroScaffold });
+            applyStyles(scaffoldErrDiv, { color: 'var(--text-error)', fontSize: '0.85em', marginTop: '4px' });
+          }
+          scaffoldBtn.onclick = () => {
+            void this.executarAdicionarFrontmatterMinimo(itemFalhado.id, itemFalhado.titulo, errDesc.filePath);
+          };
+        }
+      }
     }
 
     // Botões de controle da revisão
@@ -2074,6 +2106,7 @@ export class ContrariusDashboardView extends ItemView {
     btnVoltar.onclick = () => {
       this.narrativaRevisando = false;
       this.narrativaErroPreparacao = null;
+      this.narrativaErroScaffold = null;
       this.render();
     };
 
@@ -2088,6 +2121,34 @@ export class ContrariusDashboardView extends ItemView {
       });
       btnSalvar.disabled = this.narrativaOcupado || temErro || temErroPreparacao;
       btnSalvar.onclick = () => { void this.salvarAlteracoesNarrativas(); };
+    }
+  }
+
+  private async executarAdicionarFrontmatterMinimo(
+    idEvento: string,
+    titulo: string,
+    filePath: string,
+  ): Promise<void> {
+    if (this.narrativaOcupado) return;
+    this.narrativaErroScaffold = null;
+    this.narrativaOcupado = true;
+    this.render();
+
+    try {
+      const file = this.obsidianApp.vault.getAbstractFileByPath(filePath);
+      if (!(file instanceof TFile)) {
+        throw new Error(`Nota não encontrada: ${filePath}`);
+      }
+      const conteudoAtual = await this.obsidianApp.vault.read(file);
+      const resultado = adicionarFrontmatterMinimoEvento(conteudoAtual, { idEvento, titulo });
+      await this.obsidianApp.vault.modify(file, resultado.conteudo);
+      new Notice('Frontmatter mínimo adicionado. Revise novamente antes de salvar.');
+      this.narrativaOcupado = false;
+      await this.iniciarRevisaoNarrativa();
+    } catch (e) {
+      this.narrativaOcupado = false;
+      this.narrativaErroScaffold = 'Não foi possível adicionar o frontmatter mínimo.';
+      this.render();
     }
   }
 
