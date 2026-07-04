@@ -1,5 +1,5 @@
 import type { AlteracaoNarrativaEvento } from './narrative-order-model';
-import { aplicarPatchNarrativoEvento } from './evento-frontmatter-patcher';
+import { aplicarPatchNarrativoEvento, ErroPatchFrontmatterEvento } from './evento-frontmatter-patcher';
 
 export interface ArmazenamentoNotasNarrativas {
   ler(filePath: string): Promise<string>;
@@ -41,6 +41,118 @@ export class ErroSalvamentoNarrativo extends Error {
     this.etapa = etapa;
     this.filePath = filePath;
     this.causa = causa;
+  }
+}
+
+export interface DescricaoErroSalvamentoNarrativo {
+  readonly titulo: string;
+  readonly mensagem: string;
+  readonly acaoSugerida: string;
+  readonly filePath: string;
+  readonly etapa: EtapaErroSalvamentoNarrativo;
+}
+
+function descreverErroPatch(
+  causa: ErroPatchFrontmatterEvento,
+  filePath: string,
+  etapa: EtapaErroSalvamentoNarrativo,
+): DescricaoErroSalvamentoNarrativo {
+  switch (causa.codigo) {
+    case 'frontmatter_ausente':
+      return {
+        titulo: 'Nota sem frontmatter',
+        mensagem: `A nota "${filePath}" não possui bloco YAML inicial (frontmatter).`,
+        acaoSugerida: 'Estruture a nota com um bloco frontmatter (--- ... ---) antes de editar a ordem narrativa.',
+        filePath,
+        etapa,
+      };
+    case 'frontmatter_invalido':
+      return {
+        titulo: 'Frontmatter inválido',
+        mensagem: `O bloco YAML de "${filePath}" não pôde ser identificado com segurança.`,
+        acaoSugerida: 'Verifique se o frontmatter está bem formado e possui os delimitadores --- corretos.',
+        filePath,
+        etapa,
+      };
+    case 'chave_duplicada':
+      return {
+        titulo: 'Campo duplicado no frontmatter',
+        mensagem: `O frontmatter de "${filePath}" possui o campo "${causa.campo}" duplicado.`,
+        acaoSugerida: 'Remova a chave duplicada no frontmatter da nota antes de salvar.',
+        filePath,
+        etapa,
+      };
+    case 'valor_invalido':
+      return {
+        titulo: 'Valor narrativo inválido',
+        mensagem: `O valor do campo "${causa.campo}" em "${filePath}" é inválido.`,
+        acaoSugerida: 'Corrija o valor do campo no editor antes de salvar.',
+        filePath,
+        etapa,
+      };
+  }
+}
+
+export function descreverErroSalvamentoNarrativo(
+  erro: unknown,
+): DescricaoErroSalvamentoNarrativo {
+  if (!(erro instanceof ErroSalvamentoNarrativo)) {
+    const msg = erro instanceof Error ? erro.message : String(erro);
+    return {
+      titulo: 'Erro inesperado',
+      mensagem: `Ocorreu um erro inesperado: ${msg}`,
+      acaoSugerida: 'Tente novamente ou reinicie o painel Contrarius.',
+      filePath: '',
+      etapa: 'preparacao',
+    };
+  }
+
+  const { etapa, filePath, causa } = erro;
+
+  switch (etapa) {
+    case 'validacao':
+      return {
+        titulo: 'Erro de validação',
+        mensagem: erro.message,
+        acaoSugerida: 'Verifique os dados e tente novamente.',
+        filePath,
+        etapa,
+      };
+    case 'leitura':
+      return {
+        titulo: 'Falha ao ler nota',
+        mensagem: `Não foi possível ler o arquivo "${filePath}".`,
+        acaoSugerida: 'Verifique se a nota existe no Vault e está acessível.',
+        filePath,
+        etapa,
+      };
+    case 'preparacao':
+      if (causa instanceof ErroPatchFrontmatterEvento) {
+        return descreverErroPatch(causa, filePath, etapa);
+      }
+      return {
+        titulo: 'Falha ao preparar alteração',
+        mensagem: `Não foi possível preparar a alteração para "${filePath}".`,
+        acaoSugerida: 'Verifique o conteúdo da nota antes de tentar salvar.',
+        filePath,
+        etapa,
+      };
+    case 'escrita':
+      return {
+        titulo: 'Falha ao escrever nota',
+        mensagem: `Não foi possível salvar o arquivo "${filePath}".`,
+        acaoSugerida: 'Verifique as permissões do arquivo e tente novamente.',
+        filePath,
+        etapa,
+      };
+    case 'reversao':
+      return {
+        titulo: 'Falha na reversão',
+        mensagem: `Falha ao reverter "${filePath}" após um erro de escrita. Os dados podem estar inconsistentes.`,
+        acaoSugerida: 'Verifique os arquivos manualmente para garantir que estão corretos.',
+        filePath,
+        etapa,
+      };
   }
 }
 
