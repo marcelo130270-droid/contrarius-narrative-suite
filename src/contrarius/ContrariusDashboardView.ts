@@ -102,6 +102,12 @@ import {
   type DescricaoErroSalvamentoNarrativo,
 } from './narrative-order-write-service';
 import { adicionarFrontmatterMinimoEvento } from './evento-frontmatter-scaffold';
+import {
+  gerarMarkdownRoteiroNarrativo,
+  type DadosExportacaoRoteiroNarrativo,
+  type EventoExportacaoNarrativa,
+  type ProblemaExportacaoNarrativa,
+} from './narrative-outline-export-model';
 
 export const VIEW_TYPE_CONTRARIUS_DASHBOARD = 'contrarius-knowledge-dashboard';
 
@@ -1294,12 +1300,20 @@ export class ContrariusDashboardView extends ItemView {
 
   private renderBotaoEditarNarrativa(container: HTMLElement): void {
     const bar = container.createDiv();
-    applyStyles(bar, { marginBottom: '12px' });
-    const btn = bar.createEl('button', {
+    applyStyles(bar, { marginBottom: '12px', display: 'flex', gap: '8px', flexWrap: 'wrap' });
+
+    const btnEditar = bar.createEl('button', {
       text: 'Editar ordem narrativa',
       attr: { 'aria-label': 'Editar ordem narrativa' },
     });
-    btn.onclick = () => { this.iniciarEdicaoNarrativa(); };
+    btnEditar.onclick = () => { this.iniciarEdicaoNarrativa(); };
+
+    const btnExportar = bar.createEl('button', {
+      text: 'Exportar roteiro Markdown',
+      attr: { 'aria-label': 'Exportar roteiro narrativo em Markdown' },
+    });
+    btnExportar.disabled = this.narrativaEditando || this.narrativaRevisando || this.narrativaOcupado;
+    btnExportar.onclick = () => { void this.exportarRoteiroNarrativo(); };
   }
 
   private renderSeletorVisualizacaoNarrativa(container: HTMLElement): void {
@@ -2149,6 +2163,99 @@ export class ContrariusDashboardView extends ItemView {
       this.narrativaOcupado = false;
       this.narrativaErroScaffold = 'Não foi possível adicionar o frontmatter mínimo.';
       this.render();
+    }
+  }
+
+  private async exportarRoteiroNarrativo(): Promise<void> {
+    if (this.currentCronologia === null) return;
+
+    const filtroExportacao: FiltroVisaoCronologia = {
+      modo: 'narrativa',
+      livro: this.cronologiaLivro,
+      consulta: '',
+    };
+    const visao = construirVisaoCronologia(this.currentCronologia, filtroExportacao);
+
+    const opcaoLivro = visao.livros.find((l) => l.chave === this.cronologiaLivro);
+    const filtroLivroRotulo =
+      opcaoLivro !== undefined ? opcaoLivro.rotulo : this.cronologiaLivro;
+
+    const eventosPosicionados: EventoExportacaoNarrativa[] = visao.posicionados.map((l) => {
+      const item = l.item;
+      const livro = item.livro.find((b) => b.trim() !== '') ?? '';
+      return {
+        chave: `${item.filePath}:${item.id}`,
+        id: item.id,
+        titulo: item.titulo,
+        filePath: item.filePath,
+        livro,
+        ordemNarrativa: item.ordemNarrativa,
+        capitulo: item.capitulo,
+        cena: item.cena,
+      };
+    });
+
+    const eventosSemOrdem: EventoExportacaoNarrativa[] = visao.naoPosicionados.map((l) => {
+      const item = l.item;
+      const livro = item.livro.find((b) => b.trim() !== '') ?? '';
+      return {
+        chave: `${item.filePath}:${item.id}`,
+        id: item.id,
+        titulo: item.titulo,
+        filePath: item.filePath,
+        livro,
+        ordemNarrativa: item.ordemNarrativa,
+        capitulo: item.capitulo,
+        cena: item.cena,
+      };
+    });
+
+    const problemas: ProblemaExportacaoNarrativa[] = visao.problemas.map((p) => ({
+      nivel: p.nivel,
+      mensagem: p.mensagem,
+      relacionados: p.relacionados,
+    }));
+
+    const agora = new Date();
+    const pad2 = (n: number): string => String(n).padStart(2, '0');
+    const geradoEm = `${agora.getFullYear()}-${pad2(agora.getMonth() + 1)}-${pad2(agora.getDate())} ${pad2(agora.getHours())}:${pad2(agora.getMinutes())}`;
+    const tsArquivo = `${agora.getFullYear()}${pad2(agora.getMonth() + 1)}${pad2(agora.getDate())}-${pad2(agora.getHours())}${pad2(agora.getMinutes())}${pad2(agora.getSeconds())}`;
+
+    const tituloExport =
+      filtroLivroRotulo !== 'Todos os livros'
+        ? `Roteiro narrativo — ${filtroLivroRotulo}`
+        : 'Roteiro narrativo';
+
+    const dados: DadosExportacaoRoteiroNarrativo = {
+      titulo: tituloExport,
+      filtroLivro: filtroLivroRotulo,
+      busca: this.query.trim(),
+      geradoEm,
+      eventosPosicionados,
+      eventosSemOrdem,
+      problemas,
+    };
+
+    const conteudo = gerarMarkdownRoteiroNarrativo(dados);
+
+    try {
+      const pastaExport = '12_Export/Roteiros';
+      if (this.obsidianApp.vault.getAbstractFileByPath(pastaExport) === null) {
+        await this.obsidianApp.vault.createFolder(pastaExport);
+      }
+
+      const baseName = `roteiro-narrativo-${tsArquivo}`;
+      let caminhoFinal = `${pastaExport}/${baseName}.md`;
+      let sufixo = 2;
+      while (this.obsidianApp.vault.getAbstractFileByPath(caminhoFinal) !== null) {
+        caminhoFinal = `${pastaExport}/${baseName}-${sufixo}.md`;
+        sufixo++;
+      }
+
+      await this.obsidianApp.vault.create(caminhoFinal, conteudo);
+      new Notice(`Roteiro narrativo exportado: ${caminhoFinal}`);
+    } catch (e) {
+      new Notice('Não foi possível exportar o roteiro narrativo.');
     }
   }
 
