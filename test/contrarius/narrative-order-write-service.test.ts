@@ -1,10 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import type { AlteracaoNarrativaEvento } from '../../src/contrarius/narrative-order-model';
 import {
+  ErroPatchFrontmatterEvento,
+} from '../../src/contrarius/evento-frontmatter-patcher';
+import {
   ErroSalvamentoNarrativo,
+  descreverErroSalvamentoNarrativo,
   executarSalvamentoNarrativo,
   prepararSalvamentoNarrativo,
   type ArmazenamentoNotasNarrativas,
+  type DescricaoErroSalvamentoNarrativo,
 } from '../../src/contrarius/narrative-order-write-service';
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
@@ -546,5 +551,88 @@ describe('executarSalvamentoNarrativo', () => {
     }
     expect(erro).toBeInstanceOf(Error);
     expect(erro).toBeInstanceOf(ErroSalvamentoNarrativo);
+  });
+});
+
+// ─── descreverErroSalvamentoNarrativo ─────────────────────────────────────────
+
+describe('descreverErroSalvamentoNarrativo', () => {
+  function erroPrep(causa: unknown, fp = 'a.md'): ErroSalvamentoNarrativo {
+    return new ErroSalvamentoNarrativo('preparacao', fp, causa, 'Falha ao preparar.');
+  }
+
+  it('frontmatter ausente — título, mensagem e ação corretos', () => {
+    const causa = new ErroPatchFrontmatterEvento('frontmatter_ausente', '', 'sem fm');
+    const desc = descreverErroSalvamentoNarrativo(erroPrep(causa, 'nota.md'));
+    expect(desc.titulo).toBe('Nota sem frontmatter');
+    expect(desc.mensagem).toContain('não possui bloco YAML');
+    expect(desc.acaoSugerida).toContain('Estruture');
+  });
+
+  it('frontmatter inválido — título correto', () => {
+    const causa = new ErroPatchFrontmatterEvento('frontmatter_invalido', '', 'inv');
+    const desc = descreverErroSalvamentoNarrativo(erroPrep(causa));
+    expect(desc.titulo).toBe('Frontmatter inválido');
+  });
+
+  it('chave duplicada — título correto', () => {
+    const causa = new ErroPatchFrontmatterEvento('chave_duplicada', 'capitulo', 'dup');
+    const desc = descreverErroSalvamentoNarrativo(erroPrep(causa));
+    expect(desc.titulo).toBe('Campo duplicado no frontmatter');
+  });
+
+  it('valor inválido — título correto', () => {
+    const causa = new ErroPatchFrontmatterEvento('valor_invalido', 'ordem_narrativa', 'inv');
+    const desc = descreverErroSalvamentoNarrativo(erroPrep(causa));
+    expect(desc.titulo).toBe('Valor narrativo inválido');
+  });
+
+  it('falha de leitura — título e etapa corretos', () => {
+    const erro = new ErroSalvamentoNarrativo('leitura', 'x.md', new Error('io'), 'Falha leitura');
+    const desc = descreverErroSalvamentoNarrativo(erro);
+    expect(desc.titulo).toBe('Falha ao ler nota');
+    expect(desc.etapa).toBe('leitura');
+  });
+
+  it('falha de escrita — título e etapa corretos', () => {
+    const erro = new ErroSalvamentoNarrativo('escrita', 'y.md', new Error('io'), 'Falha escrita');
+    const desc = descreverErroSalvamentoNarrativo(erro);
+    expect(desc.titulo).toBe('Falha ao escrever nota');
+    expect(desc.etapa).toBe('escrita');
+  });
+
+  it('falha de reversão — título e etapa corretos', () => {
+    const erro = new ErroSalvamentoNarrativo('reversao', 'z.md', new Error('io'), 'Falha reversão');
+    const desc = descreverErroSalvamentoNarrativo(erro);
+    expect(desc.titulo).toBe('Falha na reversão');
+    expect(desc.etapa).toBe('reversao');
+  });
+
+  it('erro desconhecido — título genérico com mensagem do erro', () => {
+    const desc = descreverErroSalvamentoNarrativo(new Error('erro inesperado xyz'));
+    expect(desc.titulo).toBe('Erro inesperado');
+    expect(desc.mensagem).toContain('erro inesperado xyz');
+  });
+
+  it('preservação de caminho — filePath correto na descrição', () => {
+    const causa = new ErroPatchFrontmatterEvento('frontmatter_ausente', '', 'sem fm');
+    const desc = descreverErroSalvamentoNarrativo(erroPrep(causa, '05_Eventos/E-X Bartolo.md'));
+    expect(desc.filePath).toBe('05_Eventos/E-X Bartolo.md');
+  });
+
+  it('resultado novo — cada chamada retorna objeto diferente', () => {
+    const erro = new ErroSalvamentoNarrativo('leitura', 'a.md', null, 'Falha');
+    const d1 = descreverErroSalvamentoNarrativo(erro);
+    const d2 = descreverErroSalvamentoNarrativo(erro);
+    expect(d1).not.toBe(d2);
+  });
+
+  it('sem stack trace — mensagem não expõe pilha de chamadas', () => {
+    const causa = new Error('causa real');
+    causa.stack = 'Error: causa real\n    at Object.<anonymous> (foo.ts:1:1)';
+    const erro = new ErroSalvamentoNarrativo('leitura', 'a.md', causa, 'Falha');
+    const desc = descreverErroSalvamentoNarrativo(erro);
+    expect(desc.mensagem).not.toContain('at Object');
+    expect(desc.mensagem).not.toContain('foo.ts');
   });
 });

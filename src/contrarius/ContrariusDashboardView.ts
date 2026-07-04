@@ -94,9 +94,12 @@ import {
   type ProblemaPlanoNarrativo,
 } from './narrative-order-model';
 import {
+  descreverErroSalvamentoNarrativo,
   executarSalvamentoNarrativo,
   ErroSalvamentoNarrativo,
+  prepararSalvamentoNarrativo,
   type ArmazenamentoNotasNarrativas,
+  type DescricaoErroSalvamentoNarrativo,
 } from './narrative-order-write-service';
 
 export const VIEW_TYPE_CONTRARIUS_DASHBOARD = 'contrarius-knowledge-dashboard';
@@ -162,6 +165,7 @@ export class ContrariusDashboardView extends ItemView {
   private narrativaRenumInicio = 1;
   private narrativaRenumPasso = 10;
   private narrativaVisualizacao: 'lista' | 'roteiro' = 'lista';
+  private narrativaErroPreparacao: DescricaoErroSalvamentoNarrativo | null = null;
 
   constructor(leaf: WorkspaceLeaf, app: App) {
     super(leaf);
@@ -1099,7 +1103,10 @@ export class ContrariusDashboardView extends ItemView {
     }
 
     this.renderCronologiaSummary(container, visao);
-    this.renderSectionTitle(container, 'Cronologia', visao.totalVisivel);
+    const tituloSecao = this.cronologiaMode === 'narrativa' && this.narrativaVisualizacao === 'roteiro'
+      ? 'Roteiro narrativo'
+      : 'Cronologia';
+    this.renderSectionTitle(container, tituloSecao, visao.totalVisivel);
 
     if (visao.totalAntesDosFiltros === 0) {
       const msg = container.createDiv({ text: 'Nenhum Evento indexado.' });
@@ -1340,7 +1347,7 @@ export class ContrariusDashboardView extends ItemView {
     visao: VisaoCronologiaContrarius,
   ): void {
     if (visao.posicionados.length === 0 && visao.totalVisivel > 0) {
-      const msg = container.createDiv({ text: 'Nenhum evento posicionado para o roteiro.' });
+      const msg = container.createDiv({ text: 'Nenhum evento com ordem_narrativa preenchida. Edite a ordem narrativa para montar o roteiro.' });
       applyStyles(msg, { color: 'var(--text-muted)', padding: '8px 0' });
       return;
     }
@@ -1444,6 +1451,7 @@ export class ContrariusDashboardView extends ItemView {
     this.narrativaRevisando = false;
     this.narrativaOcupado = false;
     this.narrativaVaultMudou = false;
+    this.narrativaErroPreparacao = null;
     this.narrativaOrdemBruta.clear();
     this.render();
   }
@@ -1455,10 +1463,39 @@ export class ContrariusDashboardView extends ItemView {
     this.narrativaRevisando = false;
     this.narrativaOcupado = false;
     this.narrativaVaultMudou = false;
+    this.narrativaErroPreparacao = null;
     this.narrativaOrdemBruta.clear();
     if (reindexar) {
       void this.reindex();
     } else {
+      this.render();
+    }
+  }
+
+  private async iniciarRevisaoNarrativa(): Promise<void> {
+    const plano = this.narrativaPlano;
+    if (!plano || this.narrativaOcupado) return;
+
+    const alteracoes = gerarAlteracoesPlanoNarrativo(plano);
+    this.narrativaErroPreparacao = null;
+    this.narrativaRevisando = true;
+
+    if (alteracoes.length === 0) {
+      this.render();
+      return;
+    }
+
+    this.narrativaOcupado = true;
+    this.render();
+
+    const storage = this.criarArmazenamentoObsidian();
+    try {
+      await prepararSalvamentoNarrativo(alteracoes, storage);
+      this.narrativaOcupado = false;
+      this.render();
+    } catch (e) {
+      this.narrativaOcupado = false;
+      this.narrativaErroPreparacao = descreverErroSalvamentoNarrativo(e);
       this.render();
     }
   }
@@ -1612,6 +1649,9 @@ export class ContrariusDashboardView extends ItemView {
     this.renderEditorProblemas(container, plano.problemas);
     this.renderEditorControles(container, plano);
 
+    const helpNota = container.createDiv({ text: 'A ordem define a sequência; capítulo e cena organizam o roteiro.' });
+    applyStyles(helpNota, { fontSize: '0.82em', color: 'var(--text-muted)', marginBottom: '10px' });
+
     // Items (filtrados pela busca para display, mas plan completo)
     for (let idx = 0; idx < plano.itens.length; idx++) {
       const item = plano.itens[idx];
@@ -1702,10 +1742,7 @@ export class ContrariusDashboardView extends ItemView {
     });
     const temInvalido = this.narrativaOrdemBruta.size > 0;
     btnRevisar.disabled = this.narrativaOcupado || plano.totalAlterados === 0 || temInvalido;
-    btnRevisar.onclick = () => {
-      this.narrativaRevisando = true;
-      this.render();
-    };
+    btnRevisar.onclick = () => { void this.iniciarRevisaoNarrativa(); };
   }
 
   private renderEditorItem(
@@ -1753,13 +1790,14 @@ export class ContrariusDashboardView extends ItemView {
 
     // Ordem narrativa
     const ordemGroup = fieldsGrid.createDiv();
-    const ordemLabel = ordemGroup.createEl('label', { text: 'Ordem narrativa' });
+    const ordemLabel = ordemGroup.createEl('label', { text: 'Ordem narrativa (sequência)' });
     applyStyles(ordemLabel, { display: 'block', fontSize: '0.82em', color: 'var(--text-muted)', marginBottom: '3px' });
     const ordemBruta = this.narrativaOrdemBruta.get(item.chave);
     const ordemInput = ordemGroup.createEl('input', {
       type: 'text',
       value: ordemBruta !== undefined ? ordemBruta : (item.ordemAtual !== null ? String(item.ordemAtual) : ''),
     });
+    ordemInput.setAttribute('placeholder', '10, 20, 30...');
     ordemInput.setAttribute('aria-label', `Ordem narrativa de ${item.titulo}`);
     ordemInput.setAttribute('data-item-chave', item.chave);
     ordemInput.setAttribute('data-item-campo', 'ordem');
@@ -1793,6 +1831,7 @@ export class ContrariusDashboardView extends ItemView {
     const capLabel = capGroup.createEl('label', { text: 'Capítulo' });
     applyStyles(capLabel, { display: 'block', fontSize: '0.82em', color: 'var(--text-muted)', marginBottom: '3px' });
     const capInput = capGroup.createEl('input', { type: 'text', value: item.capituloAtual });
+    capInput.setAttribute('placeholder', 'Capítulo 1');
     capInput.setAttribute('aria-label', `Capítulo de ${item.titulo}`);
     capInput.setAttribute('data-item-chave', item.chave);
     capInput.setAttribute('data-item-campo', 'capitulo');
@@ -1809,6 +1848,7 @@ export class ContrariusDashboardView extends ItemView {
     const cenaLabel = cenaGroup.createEl('label', { text: 'Cena' });
     applyStyles(cenaLabel, { display: 'block', fontSize: '0.82em', color: 'var(--text-muted)', marginBottom: '3px' });
     const cenaInput = cenaGroup.createEl('input', { type: 'text', value: item.cenaAtual });
+    cenaInput.setAttribute('placeholder', 'Cena ou bloco narrativo');
     cenaInput.setAttribute('aria-label', `Cena de ${item.titulo}`);
     cenaInput.setAttribute('data-item-chave', item.chave);
     cenaInput.setAttribute('data-item-campo', 'cena');
@@ -1907,10 +1947,23 @@ export class ContrariusDashboardView extends ItemView {
     const plano = this.narrativaPlano!;
     const alteracoes = gerarAlteracoesPlanoNarrativo(plano);
     const temErro = plano.problemas.some((p) => p.nivel === 'erro');
+    const temErroPreparacao = this.narrativaErroPreparacao !== null;
 
     // Título
     const titulo = container.createEl('h3', { text: 'Revisão das alterações' });
     applyStyles(titulo, { marginTop: '0' });
+
+    if (this.narrativaOcupado) {
+      const loadDiv = container.createDiv({ text: 'Verificando compatibilidade dos arquivos…' });
+      applyStyles(loadDiv, {
+        padding: '8px 12px',
+        marginBottom: '14px',
+        borderRadius: '6px',
+        background: 'var(--background-secondary)',
+        color: 'var(--text-muted)',
+        fontSize: '0.9em',
+      });
+    }
 
     this.renderEditorProblemas(container, plano.problemas);
 
@@ -1988,6 +2041,27 @@ export class ContrariusDashboardView extends ItemView {
       applyStyles(errDiv, { color: 'var(--text-error)', padding: '8px 0', fontSize: '0.9em' });
     }
 
+    if (temErroPreparacao) {
+      const errDesc = this.narrativaErroPreparacao!;
+      const errBox = container.createDiv();
+      applyStyles(errBox, {
+        padding: '10px 14px',
+        marginTop: '12px',
+        borderRadius: '6px',
+        background: 'var(--background-secondary)',
+        borderLeft: '3px solid var(--text-error)',
+      });
+      const errTitulo = errBox.createEl('strong', { text: errDesc.titulo });
+      applyStyles(errTitulo, { display: 'block', color: 'var(--text-error)', marginBottom: '4px', fontSize: '0.9em' });
+      if (errDesc.filePath !== '') {
+        const errCaminho = errBox.createDiv({ text: errDesc.filePath });
+        applyStyles(errCaminho, { fontFamily: 'var(--font-monospace)', fontSize: '0.82em', color: 'var(--text-muted)', marginBottom: '4px' });
+      }
+      errBox.createDiv({ text: errDesc.mensagem });
+      const errAcao = errBox.createDiv({ text: errDesc.acaoSugerida });
+      applyStyles(errAcao, { marginTop: '4px', fontSize: '0.88em', color: 'var(--text-muted)' });
+    }
+
     // Botões de controle da revisão
     const btnRow = container.createDiv();
     applyStyles(btnRow, { display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '14px' });
@@ -1999,19 +2073,20 @@ export class ContrariusDashboardView extends ItemView {
     btnVoltar.disabled = this.narrativaOcupado;
     btnVoltar.onclick = () => {
       this.narrativaRevisando = false;
+      this.narrativaErroPreparacao = null;
       this.render();
     };
 
     if (alteracoes.length > 0) {
       const btnSalvar = btnRow.createEl('button', {
-        text: this.narrativaOcupado ? 'Salvando…' : 'Salvar alterações',
+        text: this.narrativaOcupado ? 'Aguarde…' : 'Salvar alterações',
         attr: { 'aria-label': 'Salvar alterações da ordem narrativa' },
       });
       applyStyles(btnSalvar, {
-        background: temErro ? '' : 'var(--interactive-accent)',
-        color: temErro ? '' : 'var(--text-on-accent)',
+        background: (temErro || temErroPreparacao) ? '' : 'var(--interactive-accent)',
+        color: (temErro || temErroPreparacao) ? '' : 'var(--text-on-accent)',
       });
-      btnSalvar.disabled = this.narrativaOcupado || temErro;
+      btnSalvar.disabled = this.narrativaOcupado || temErro || temErroPreparacao;
       btnSalvar.onclick = () => { void this.salvarAlteracoesNarrativas(); };
     }
   }
