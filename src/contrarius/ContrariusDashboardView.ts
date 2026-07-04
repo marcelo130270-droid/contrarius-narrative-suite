@@ -70,6 +70,25 @@ import {
   voltarDetalhe,
   type ContrariusDetailNavigationState,
 } from './entity-details-view-model';
+import {
+  construirPlanoNarrativo,
+  editarItemPlanoNarrativo,
+  gerarAlteracoesPlanoNarrativo,
+  moverItemPlanoNarrativo,
+  renumerarPlanoNarrativo,
+  restaurarItemPlanoNarrativo,
+  restaurarPlanoNarrativo,
+  SEM_LIVRO_PLANO_NARRATIVO,
+  TODOS_OS_LIVROS_PLANO_NARRATIVO,
+  type ItemPlanoNarrativo,
+  type PlanoNarrativo,
+  type ProblemaPlanoNarrativo,
+} from './narrative-order-model';
+import {
+  executarSalvamentoNarrativo,
+  ErroSalvamentoNarrativo,
+  type ArmazenamentoNotasNarrativas,
+} from './narrative-order-write-service';
 
 export const VIEW_TYPE_CONTRARIUS_DASHBOARD = 'contrarius-knowledge-dashboard';
 
@@ -125,6 +144,14 @@ export class ContrariusDashboardView extends ItemView {
   private refreshTimer: number | null = null;
   private dashboardContentEl: HTMLElement | null = null;
   private detailNavState: ContrariusDetailNavigationState = criarEstadoNavegacaoDetalhe();
+  private narrativaPlano: PlanoNarrativo | null = null;
+  private narrativaEditando = false;
+  private narrativaRevisando = false;
+  private narrativaOcupado = false;
+  private narrativaVaultMudou = false;
+  private narrativaOrdemBruta: Map<string, string> = new Map();
+  private narrativaRenumInicio = 1;
+  private narrativaRenumPasso = 10;
 
   constructor(leaf: WorkspaceLeaf, app: App) {
     super(leaf);
@@ -194,6 +221,11 @@ export class ContrariusDashboardView extends ItemView {
   }
 
   private requestRefresh(): void {
+    if (this.narrativaEditando) {
+      this.narrativaVaultMudou = true;
+      this.render();
+      return;
+    }
     if (this.refreshTimer !== null) window.clearTimeout(this.refreshTimer);
     this.refreshTimer = window.setTimeout(() => {
       this.refreshTimer = null;
@@ -276,7 +308,7 @@ export class ContrariusDashboardView extends ItemView {
         }
         break;
       case 'cronologia':
-        if (this.detailNavState.currentKey !== null) {
+        if (this.detailNavState.currentKey !== null && !this.narrativaEditando) {
           this.renderFicha(this.dashboardContentEl, this.currentIndex);
         } else if (this.currentCronologia !== null) {
           this.renderCronologia(this.dashboardContentEl, this.currentCronologia);
@@ -344,7 +376,7 @@ export class ContrariusDashboardView extends ItemView {
     const refresh = toolbar.createEl('button', { attr: { 'aria-label': 'Reindexar o Vault' } });
     setIcon(refresh, 'refresh-cw');
     refresh.appendText(this.loading ? ' Indexando…' : ' Reindexar');
-    refresh.disabled = this.loading;
+    refresh.disabled = this.loading || this.narrativaEditando;
     refresh.onclick = () => { void this.reindex(); };
 
     const search = toolbar.createEl('input', {
@@ -384,6 +416,7 @@ export class ContrariusDashboardView extends ItemView {
       const button = tabs.createEl('button', { text: tab.label });
       button.setAttr('role', 'tab');
       button.setAttr('aria-selected', String(this.activeTab === tab.id));
+      button.disabled = this.narrativaEditando;
       applyStyles(button, {
         whiteSpace: 'nowrap',
         background: this.activeTab === tab.id ? 'var(--interactive-accent)' : '',
@@ -1031,6 +1064,18 @@ export class ContrariusDashboardView extends ItemView {
     const livroExiste = livros.some((l) => l.chave === this.cronologiaLivro);
     if (!livroExiste) this.cronologiaLivro = TODOS_OS_LIVROS_CRONOLOGIA;
 
+    this.renderCronologiaModeBar(container);
+    this.renderCronologiaLivroSelector(container, livros);
+
+    if (this.narrativaEditando && this.narrativaPlano !== null) {
+      if (this.narrativaRevisando) {
+        this.renderCronologiaRevisao(container);
+      } else {
+        this.renderCronologiaEditor(container);
+      }
+      return;
+    }
+
     const filtro: FiltroVisaoCronologia = {
       modo: this.cronologiaMode,
       livro: this.cronologiaLivro,
@@ -1038,8 +1083,10 @@ export class ContrariusDashboardView extends ItemView {
     };
     const visao = construirVisaoCronologia(cronologia, filtro);
 
-    this.renderCronologiaModeBar(container);
-    this.renderCronologiaLivroSelector(container, visao.livros);
+    if (this.cronologiaMode === 'narrativa') {
+      this.renderBotaoEditarNarrativa(container);
+    }
+
     this.renderCronologiaSummary(container, visao);
     this.renderSectionTitle(container, 'Cronologia', visao.totalVisivel);
 
@@ -1074,6 +1121,7 @@ export class ContrariusDashboardView extends ItemView {
       const active = this.cronologiaMode === mode;
       const btn = bar.createEl('button', { text: label });
       btn.setAttr('aria-pressed', String(active));
+      btn.disabled = this.narrativaEditando;
       applyStyles(btn, {
         background: active ? 'var(--interactive-accent)' : '',
         color: active ? 'var(--text-on-accent)' : '',
@@ -1102,6 +1150,7 @@ export class ContrariusDashboardView extends ItemView {
     applyStyles(label, { color: 'var(--text-muted)', fontSize: '0.92em' });
 
     const select = wrapper.createEl('select');
+    select.disabled = this.narrativaEditando;
     for (const opcao of livros) {
       const option = select.createEl('option', {
         text: `${opcao.rotulo} (${opcao.quantidade})`,
@@ -1215,6 +1264,597 @@ export class ContrariusDashboardView extends ItemView {
       this.detailNavState = abrirDetalheRaiz(key);
       this.render();
     };
+  }
+
+  // ─── Editor de ordem narrativa ───────────────────────────────────────────────
+
+  private renderBotaoEditarNarrativa(container: HTMLElement): void {
+    const bar = container.createDiv();
+    applyStyles(bar, { marginBottom: '12px' });
+    const btn = bar.createEl('button', {
+      text: 'Editar ordem narrativa',
+      attr: { 'aria-label': 'Editar ordem narrativa' },
+    });
+    btn.onclick = () => { this.iniciarEdicaoNarrativa(); };
+  }
+
+  private iniciarEdicaoNarrativa(): void {
+    if (this.currentIndex === null) return;
+    this.narrativaPlano = construirPlanoNarrativo(this.currentIndex, this.cronologiaLivro);
+    this.narrativaEditando = true;
+    this.narrativaRevisando = false;
+    this.narrativaOcupado = false;
+    this.narrativaVaultMudou = false;
+    this.narrativaOrdemBruta.clear();
+    this.render();
+  }
+
+  private cancelarEdicaoNarrativa(): void {
+    const reindexar = this.narrativaVaultMudou;
+    this.narrativaPlano = null;
+    this.narrativaEditando = false;
+    this.narrativaRevisando = false;
+    this.narrativaOcupado = false;
+    this.narrativaVaultMudou = false;
+    this.narrativaOrdemBruta.clear();
+    if (reindexar) {
+      void this.reindex();
+    } else {
+      this.render();
+    }
+  }
+
+  private async salvarAlteracoesNarrativas(): Promise<void> {
+    const plano = this.narrativaPlano;
+    if (!plano || !this.narrativaRevisando || this.narrativaOcupado) return;
+
+    const alteracoes = gerarAlteracoesPlanoNarrativo(plano);
+    if (alteracoes.length === 0) return;
+
+    const temErro = plano.problemas.some((p) => p.nivel === 'erro');
+    if (temErro) return;
+
+    this.narrativaOcupado = true;
+    this.render();
+
+    const storage = this.criarArmazenamentoObsidian();
+    try {
+      const resultado = await executarSalvamentoNarrativo(alteracoes, storage);
+      new Notice(`Contrarius: ${resultado.arquivosAlterados.length} arquivo(s) atualizado(s).`);
+      this.narrativaPlano = null;
+      this.narrativaEditando = false;
+      this.narrativaRevisando = false;
+      this.narrativaOcupado = false;
+      this.narrativaVaultMudou = false;
+      this.narrativaOrdemBruta.clear();
+      await this.reindex();
+    } catch (e) {
+      this.narrativaOcupado = false;
+      const eRev = e instanceof ErroSalvamentoNarrativo && e.etapa === 'reversao';
+      const msg = e instanceof ErroSalvamentoNarrativo
+        ? `Contrarius: erro ao salvar (${e.etapa}): ${e.message}`
+        : `Contrarius: erro inesperado ao salvar: ${e instanceof Error ? e.message : String(e)}`;
+      new Notice(msg);
+      if (eRev) {
+        new Notice(
+          'Contrarius: ATENÇÃO — falha na reversão! Verifique os arquivos manualmente.',
+          0,
+        );
+      }
+      this.render();
+    }
+  }
+
+  private criarArmazenamentoObsidian(): ArmazenamentoNotasNarrativas {
+    return {
+      ler: async (filePath: string): Promise<string> => {
+        const file = this.obsidianApp.vault.getAbstractFileByPath(filePath);
+        if (!(file instanceof TFile)) {
+          throw new Error(`Nota não encontrada: ${filePath}`);
+        }
+        return this.obsidianApp.vault.read(file);
+      },
+      escrever: async (filePath: string, conteudo: string): Promise<void> => {
+        const file = this.obsidianApp.vault.getAbstractFileByPath(filePath);
+        if (!(file instanceof TFile)) {
+          throw new Error(`Nota não encontrada para escrita: ${filePath}`);
+        }
+        await this.obsidianApp.vault.modify(file, conteudo);
+      },
+    };
+  }
+
+  private renderPreservandoFoco(): void {
+    const activeEl = document.activeElement;
+    const chave = activeEl instanceof HTMLElement ? activeEl.getAttribute('data-item-chave') : null;
+    const campo = activeEl instanceof HTMLElement ? activeEl.getAttribute('data-item-campo') : null;
+    const selStart = activeEl instanceof HTMLInputElement ? activeEl.selectionStart : null;
+    const selEnd = activeEl instanceof HTMLInputElement ? activeEl.selectionEnd : null;
+
+    this.render();
+
+    if (chave !== null && campo !== null) {
+      window.setTimeout(() => {
+        for (const el of Array.from(this.containerEl.querySelectorAll('[data-item-chave]'))) {
+          if (
+            el instanceof HTMLInputElement &&
+            el.getAttribute('data-item-chave') === chave &&
+            el.getAttribute('data-item-campo') === campo
+          ) {
+            el.focus();
+            if (selStart !== null && selEnd !== null) {
+              el.setSelectionRange(selStart, selEnd);
+            }
+            break;
+          }
+        }
+      }, 0);
+    }
+  }
+
+  private narrativaMatcheBusca(item: ItemPlanoNarrativo): boolean {
+    const raw = this.query.trim();
+    if (raw === '') return true;
+    const q = raw.normalize('NFD').replace(/[̀-ͯ]/g, '').toLocaleLowerCase('pt-BR');
+    const campos = [item.titulo, item.id, item.livro, item.filePath, item.capituloAtual, item.cenaAtual];
+    return campos.some((f) =>
+      f.normalize('NFD').replace(/[̀-ͯ]/g, '').toLocaleLowerCase('pt-BR').includes(q),
+    );
+  }
+
+  private renderCronologiaEditor(container: HTMLElement): void {
+    const plano = this.narrativaPlano!;
+
+    if (this.narrativaVaultMudou) {
+      const aviso = container.createDiv({
+        text: 'O Vault mudou durante a edição. O salvamento relerá os arquivos atuais.',
+      });
+      applyStyles(aviso, {
+        padding: '8px 12px',
+        marginBottom: '12px',
+        borderRadius: '6px',
+        background: 'var(--background-modifier-message)',
+        color: 'var(--text-warning)',
+        fontSize: '0.9em',
+      });
+    }
+
+    // Stats
+    const stats = container.createDiv();
+    applyStyles(stats, {
+      display: 'flex',
+      gap: '16px',
+      marginBottom: '12px',
+      padding: '8px 12px',
+      background: 'var(--background-secondary)',
+      borderRadius: '6px',
+      fontSize: '0.88em',
+      color: 'var(--text-muted)',
+      flexWrap: 'wrap',
+    });
+    const livroLabel = plano.livro === TODOS_OS_LIVROS_PLANO_NARRATIVO
+      ? 'Todos os livros'
+      : plano.livro === SEM_LIVRO_PLANO_NARRATIVO
+        ? 'Sem livro'
+        : plano.livro;
+
+    const statItems: ReadonlyArray<[string, string | number]> = [
+      ['Livro', livroLabel],
+      ['Total', plano.itens.length],
+      ['Alterados', plano.totalAlterados],
+      ['Problemas', plano.problemas.length],
+    ];
+    for (const [label, valor] of statItems) {
+      const s = stats.createSpan();
+      s.createEl('strong', { text: String(valor) });
+      s.appendText(` ${label}`);
+    }
+
+    this.renderEditorProblemas(container, plano.problemas);
+    this.renderEditorControles(container, plano);
+
+    // Items (filtrados pela busca para display, mas plan completo)
+    for (let idx = 0; idx < plano.itens.length; idx++) {
+      const item = plano.itens[idx];
+      if (!this.narrativaMatcheBusca(item)) continue;
+      this.renderEditorItem(container, item, idx, plano.itens.length);
+    }
+  }
+
+  private renderEditorControles(container: HTMLElement, plano: PlanoNarrativo): void {
+    const bar = container.createDiv();
+    applyStyles(bar, {
+      display: 'flex',
+      gap: '8px',
+      alignItems: 'center',
+      flexWrap: 'wrap',
+      marginBottom: '14px',
+      padding: '10px 12px',
+      background: 'var(--background-secondary)',
+      borderRadius: '6px',
+    });
+
+    // Renumerar
+    const renumBtn = bar.createEl('button', {
+      text: 'Renumerar',
+      attr: { 'aria-label': 'Renumerar a ordem narrativa' },
+    });
+    renumBtn.disabled = this.narrativaOcupado;
+    renumBtn.onclick = () => {
+      this.narrativaPlano = renumerarPlanoNarrativo(this.narrativaPlano!, {
+        inicio: this.narrativaRenumInicio,
+        passo: this.narrativaRenumPasso,
+      });
+      this.narrativaRevisando = false;
+      this.render();
+    };
+
+    const labelInicio = bar.createEl('label', { text: 'Início' });
+    applyStyles(labelInicio, { color: 'var(--text-muted)', fontSize: '0.88em' });
+    const inputInicio = bar.createEl('input', { type: 'text', value: String(this.narrativaRenumInicio) });
+    applyStyles(inputInicio, { width: '52px' });
+    inputInicio.setAttribute('aria-label', 'Início da renumeração');
+    inputInicio.disabled = this.narrativaOcupado;
+    inputInicio.oninput = () => {
+      const n = Number(inputInicio.value.trim());
+      if (Number.isFinite(n) && Number.isInteger(n)) this.narrativaRenumInicio = n;
+    };
+
+    const labelPasso = bar.createEl('label', { text: 'Passo' });
+    applyStyles(labelPasso, { color: 'var(--text-muted)', fontSize: '0.88em' });
+    const inputPasso = bar.createEl('input', { type: 'text', value: String(this.narrativaRenumPasso) });
+    applyStyles(inputPasso, { width: '52px' });
+    inputPasso.setAttribute('aria-label', 'Passo da renumeração');
+    inputPasso.disabled = this.narrativaOcupado;
+    inputPasso.oninput = () => {
+      const n = Number(inputPasso.value.trim());
+      if (Number.isFinite(n) && Number.isInteger(n) && n !== 0) this.narrativaRenumPasso = n;
+    };
+
+    const spacer = bar.createDiv();
+    applyStyles(spacer, { flex: '1' });
+
+    const btnRestTudo = bar.createEl('button', {
+      text: 'Restaurar tudo',
+      attr: { 'aria-label': 'Restaurar todos os itens' },
+    });
+    btnRestTudo.disabled = this.narrativaOcupado || plano.totalAlterados === 0;
+    btnRestTudo.onclick = () => {
+      this.narrativaPlano = restaurarPlanoNarrativo(this.narrativaPlano!);
+      this.narrativaOrdemBruta.clear();
+      this.narrativaRevisando = false;
+      this.render();
+    };
+
+    const btnCancelar = bar.createEl('button', {
+      text: 'Cancelar edição',
+      attr: { 'aria-label': 'Cancelar edição da ordem narrativa' },
+    });
+    btnCancelar.disabled = this.narrativaOcupado;
+    btnCancelar.onclick = () => { this.cancelarEdicaoNarrativa(); };
+
+    const btnRevisar = bar.createEl('button', {
+      text: 'Revisar alterações',
+      attr: { 'aria-label': 'Revisar alterações antes de salvar' },
+    });
+    applyStyles(btnRevisar, {
+      background: 'var(--interactive-accent)',
+      color: 'var(--text-on-accent)',
+    });
+    const temInvalido = this.narrativaOrdemBruta.size > 0;
+    btnRevisar.disabled = this.narrativaOcupado || plano.totalAlterados === 0 || temInvalido;
+    btnRevisar.onclick = () => {
+      this.narrativaRevisando = true;
+      this.render();
+    };
+  }
+
+  private renderEditorItem(
+    container: HTMLElement,
+    item: ItemPlanoNarrativo,
+    idx: number,
+    total: number,
+  ): void {
+    const card = container.createDiv();
+    card.setAttribute('data-item-card-chave', item.chave);
+    applyStyles(card, {
+      ...this.cardStyles(),
+      borderLeft: item.alterado ? '3px solid var(--interactive-accent)' : '',
+    });
+
+    // Cabeçalho
+    const cabRow = card.createDiv();
+    applyStyles(cabRow, { display: 'flex', alignItems: 'flex-start', gap: '8px', flexWrap: 'wrap', marginBottom: '6px' });
+    const titleEl = cabRow.createEl('h4', { text: item.titulo });
+    applyStyles(titleEl, { margin: '0', flex: '1 1 auto' });
+    if (item.alterado) {
+      const badge = cabRow.createSpan({ text: 'Alterado' });
+      applyStyles(badge, {
+        display: 'inline-flex',
+        alignItems: 'center',
+        padding: '2px 7px',
+        borderRadius: '999px',
+        background: 'var(--interactive-accent)',
+        color: 'var(--text-on-accent)',
+        fontSize: '0.72em',
+        fontWeight: '600',
+      });
+    }
+
+    const metaRow = card.createDiv();
+    applyStyles(metaRow, { color: 'var(--text-muted)', fontSize: '0.82em', marginBottom: '10px' });
+    metaRow.appendText(`${item.id}`);
+    if (item.livro !== '') metaRow.appendText(` · ${item.livro}`);
+    const pathSpan = metaRow.createSpan({ text: ` · ${item.filePath}` });
+    applyStyles(pathSpan, { fontFamily: 'var(--font-monospace)', fontSize: '0.9em' });
+
+    // Inputs
+    const fieldsGrid = card.createDiv();
+    applyStyles(fieldsGrid, { display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '10px' });
+
+    // Ordem narrativa
+    const ordemGroup = fieldsGrid.createDiv();
+    const ordemLabel = ordemGroup.createEl('label', { text: 'Ordem narrativa' });
+    applyStyles(ordemLabel, { display: 'block', fontSize: '0.82em', color: 'var(--text-muted)', marginBottom: '3px' });
+    const ordemBruta = this.narrativaOrdemBruta.get(item.chave);
+    const ordemInput = ordemGroup.createEl('input', {
+      type: 'text',
+      value: ordemBruta !== undefined ? ordemBruta : (item.ordemAtual !== null ? String(item.ordemAtual) : ''),
+    });
+    ordemInput.setAttribute('aria-label', `Ordem narrativa de ${item.titulo}`);
+    ordemInput.setAttribute('data-item-chave', item.chave);
+    ordemInput.setAttribute('data-item-campo', 'ordem');
+    applyStyles(ordemInput, { width: '90px', borderColor: ordemBruta !== undefined ? 'var(--text-error)' : '' });
+    ordemInput.disabled = this.narrativaOcupado;
+    ordemInput.oninput = () => {
+      const raw = ordemInput.value;
+      const trimmed = raw.trim();
+      if (trimmed === '') {
+        this.narrativaOrdemBruta.delete(item.chave);
+        this.narrativaPlano = editarItemPlanoNarrativo(this.narrativaPlano!, item.chave, { ordemNarrativa: null });
+      } else {
+        const num = Number(trimmed);
+        if (Number.isFinite(num) && Number.isInteger(num)) {
+          this.narrativaOrdemBruta.delete(item.chave);
+          this.narrativaPlano = editarItemPlanoNarrativo(this.narrativaPlano!, item.chave, { ordemNarrativa: num });
+        } else {
+          this.narrativaOrdemBruta.set(item.chave, raw);
+        }
+      }
+      this.narrativaRevisando = false;
+      this.renderPreservandoFoco();
+    };
+    if (ordemBruta !== undefined) {
+      const errMsg = ordemGroup.createDiv({ text: 'Valor inválido: use um número inteiro.' });
+      applyStyles(errMsg, { color: 'var(--text-error)', fontSize: '0.78em', marginTop: '2px' });
+    }
+
+    // Capítulo
+    const capGroup = fieldsGrid.createDiv();
+    const capLabel = capGroup.createEl('label', { text: 'Capítulo' });
+    applyStyles(capLabel, { display: 'block', fontSize: '0.82em', color: 'var(--text-muted)', marginBottom: '3px' });
+    const capInput = capGroup.createEl('input', { type: 'text', value: item.capituloAtual });
+    capInput.setAttribute('aria-label', `Capítulo de ${item.titulo}`);
+    capInput.setAttribute('data-item-chave', item.chave);
+    capInput.setAttribute('data-item-campo', 'capitulo');
+    applyStyles(capInput, { width: '120px' });
+    capInput.disabled = this.narrativaOcupado;
+    capInput.oninput = () => {
+      this.narrativaPlano = editarItemPlanoNarrativo(this.narrativaPlano!, item.chave, { capitulo: capInput.value });
+      this.narrativaRevisando = false;
+      this.renderPreservandoFoco();
+    };
+
+    // Cena
+    const cenaGroup = fieldsGrid.createDiv();
+    const cenaLabel = cenaGroup.createEl('label', { text: 'Cena' });
+    applyStyles(cenaLabel, { display: 'block', fontSize: '0.82em', color: 'var(--text-muted)', marginBottom: '3px' });
+    const cenaInput = cenaGroup.createEl('input', { type: 'text', value: item.cenaAtual });
+    cenaInput.setAttribute('aria-label', `Cena de ${item.titulo}`);
+    cenaInput.setAttribute('data-item-chave', item.chave);
+    cenaInput.setAttribute('data-item-campo', 'cena');
+    applyStyles(cenaInput, { width: '120px' });
+    cenaInput.disabled = this.narrativaOcupado;
+    cenaInput.oninput = () => {
+      this.narrativaPlano = editarItemPlanoNarrativo(this.narrativaPlano!, item.chave, { cena: cenaInput.value });
+      this.narrativaRevisando = false;
+      this.renderPreservandoFoco();
+    };
+
+    // Botões de ação
+    const btnRow = card.createDiv();
+    applyStyles(btnRow, { display: 'flex', gap: '6px', flexWrap: 'wrap' });
+
+    const btnCima = btnRow.createEl('button', {
+      text: 'Mover para cima',
+      attr: { 'aria-label': `Mover ${item.titulo} para cima` },
+    });
+    btnCima.disabled = this.narrativaOcupado || idx === 0;
+    btnCima.onclick = () => {
+      this.narrativaPlano = moverItemPlanoNarrativo(this.narrativaPlano!, item.chave, idx - 1);
+      this.narrativaRevisando = false;
+      this.render();
+      window.setTimeout(() => {
+        const card2 = this.containerEl.querySelector(`[data-item-card-chave="${item.chave}"]`);
+        (card2?.querySelector('button') as HTMLElement | null)?.focus();
+      }, 0);
+    };
+
+    const btnBaixo = btnRow.createEl('button', {
+      text: 'Mover para baixo',
+      attr: { 'aria-label': `Mover ${item.titulo} para baixo` },
+    });
+    btnBaixo.disabled = this.narrativaOcupado || idx === total - 1;
+    btnBaixo.onclick = () => {
+      this.narrativaPlano = moverItemPlanoNarrativo(this.narrativaPlano!, item.chave, idx + 1);
+      this.narrativaRevisando = false;
+      this.render();
+      window.setTimeout(() => {
+        const card2 = this.containerEl.querySelector(`[data-item-card-chave="${item.chave}"]`);
+        (card2?.querySelector('button') as HTMLElement | null)?.focus();
+      }, 0);
+    };
+
+    const btnRestaurar = btnRow.createEl('button', {
+      text: 'Restaurar',
+      attr: { 'aria-label': `Restaurar ${item.titulo} ao valor original` },
+    });
+    btnRestaurar.disabled = this.narrativaOcupado || !item.alterado;
+    btnRestaurar.onclick = () => {
+      this.narrativaOrdemBruta.delete(item.chave);
+      this.narrativaPlano = restaurarItemPlanoNarrativo(this.narrativaPlano!, item.chave);
+      this.narrativaRevisando = false;
+      this.render();
+    };
+
+    const btnAbrir = btnRow.createEl('button', {
+      text: 'Abrir nota',
+      attr: { 'aria-label': `Abrir nota de ${item.titulo}` },
+    });
+    btnAbrir.onclick = () => { void this.openFile(item.filePath); };
+  }
+
+  private renderEditorProblemas(
+    container: HTMLElement,
+    problemas: readonly ProblemaPlanoNarrativo[],
+  ): void {
+    if (problemas.length === 0) return;
+    const box = container.createDiv();
+    applyStyles(box, {
+      padding: '8px 12px',
+      marginBottom: '12px',
+      borderRadius: '6px',
+      background: 'var(--background-secondary)',
+      borderLeft: '3px solid var(--text-warning)',
+    });
+    const heading = box.createEl('strong', { text: `Problemas (${problemas.length})` });
+    applyStyles(heading, { display: 'block', marginBottom: '4px', fontSize: '0.88em' });
+    for (const p of problemas) {
+      const row = box.createDiv();
+      applyStyles(row, { fontSize: '0.82em', marginTop: '3px' });
+      const nivel = row.createSpan({ text: p.nivel === 'erro' ? 'Erro' : 'Aviso' });
+      applyStyles(nivel, {
+        fontWeight: '600',
+        color: p.nivel === 'erro' ? 'var(--text-error)' : 'var(--text-warning)',
+        marginRight: '6px',
+        textTransform: 'uppercase',
+        fontSize: '0.78em',
+      });
+      row.appendText(p.mensagem);
+    }
+  }
+
+  private renderCronologiaRevisao(container: HTMLElement): void {
+    const plano = this.narrativaPlano!;
+    const alteracoes = gerarAlteracoesPlanoNarrativo(plano);
+    const temErro = plano.problemas.some((p) => p.nivel === 'erro');
+
+    // Título
+    const titulo = container.createEl('h3', { text: 'Revisão das alterações' });
+    applyStyles(titulo, { marginTop: '0' });
+
+    this.renderEditorProblemas(container, plano.problemas);
+
+    // Stats
+    const statsDiv = container.createDiv();
+    applyStyles(statsDiv, {
+      padding: '8px 12px',
+      marginBottom: '14px',
+      background: 'var(--background-secondary)',
+      borderRadius: '6px',
+      fontSize: '0.88em',
+      color: 'var(--text-muted)',
+    });
+    statsDiv.appendText(`Total de arquivos a modificar: `);
+    statsDiv.createEl('strong', { text: String(alteracoes.length) });
+
+    if (alteracoes.length === 0) {
+      const msg = container.createDiv({ text: 'Nenhuma alteração para salvar.' });
+      applyStyles(msg, { color: 'var(--text-muted)', padding: '12px 0' });
+    } else {
+      for (const alt of alteracoes) {
+        const card = container.createDiv();
+        applyStyles(card, { ...this.cardStyles(), marginBottom: '8px' });
+        const fp = card.createDiv({ text: alt.filePath });
+        applyStyles(fp, { fontFamily: 'var(--font-monospace)', fontSize: '0.82em', marginBottom: '8px', color: 'var(--text-muted)' });
+        const grid = card.createDiv();
+        applyStyles(grid, {
+          display: 'grid',
+          gridTemplateColumns: 'minmax(120px, 0.3fr) 1fr 1fr',
+          gap: '4px 12px',
+          fontSize: '0.88em',
+        });
+        const hCampo = grid.createDiv({ text: 'Campo' });
+        applyStyles(hCampo, { fontWeight: '600', color: 'var(--text-muted)' });
+        const hAntes = grid.createDiv({ text: 'Antes' });
+        applyStyles(hAntes, { fontWeight: '600', color: 'var(--text-muted)' });
+        const hDepois = grid.createDiv({ text: 'Depois' });
+        applyStyles(hDepois, { fontWeight: '600', color: 'var(--text-muted)' });
+
+        type Campo = { label: string; antes: string; depois: string };
+        const campos: Campo[] = [];
+        if (alt.antes.ordemNarrativa !== alt.depois.ordemNarrativa) {
+          campos.push({
+            label: 'Ordem narrativa',
+            antes: alt.antes.ordemNarrativa !== null ? String(alt.antes.ordemNarrativa) : '(vazio)',
+            depois: alt.depois.ordemNarrativa !== null ? String(alt.depois.ordemNarrativa) : '(vazio)',
+          });
+        }
+        if (alt.antes.capitulo !== alt.depois.capitulo) {
+          campos.push({
+            label: 'Capítulo',
+            antes: alt.antes.capitulo || '(vazio)',
+            depois: alt.depois.capitulo || '(vazio)',
+          });
+        }
+        if (alt.antes.cena !== alt.depois.cena) {
+          campos.push({
+            label: 'Cena',
+            antes: alt.antes.cena || '(vazio)',
+            depois: alt.depois.cena || '(vazio)',
+          });
+        }
+        for (const c of campos) {
+          grid.createDiv({ text: c.label });
+          const antesEl = grid.createDiv({ text: c.antes });
+          applyStyles(antesEl, { color: 'var(--text-muted)' });
+          const depoisEl = grid.createDiv({ text: c.depois });
+          applyStyles(depoisEl, { fontWeight: '500' });
+        }
+      }
+    }
+
+    if (temErro) {
+      const errDiv = container.createDiv({ text: 'Problemas de nível erro bloqueiam o salvamento. Volte à edição para corrigi-los.' });
+      applyStyles(errDiv, { color: 'var(--text-error)', padding: '8px 0', fontSize: '0.9em' });
+    }
+
+    // Botões de controle da revisão
+    const btnRow = container.createDiv();
+    applyStyles(btnRow, { display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '14px' });
+
+    const btnVoltar = btnRow.createEl('button', {
+      text: 'Voltar à edição',
+      attr: { 'aria-label': 'Voltar à edição da ordem narrativa' },
+    });
+    btnVoltar.disabled = this.narrativaOcupado;
+    btnVoltar.onclick = () => {
+      this.narrativaRevisando = false;
+      this.render();
+    };
+
+    if (alteracoes.length > 0) {
+      const btnSalvar = btnRow.createEl('button', {
+        text: this.narrativaOcupado ? 'Salvando…' : 'Salvar alterações',
+        attr: { 'aria-label': 'Salvar alterações da ordem narrativa' },
+      });
+      applyStyles(btnSalvar, {
+        background: temErro ? '' : 'var(--interactive-accent)',
+        color: temErro ? '' : 'var(--text-on-accent)',
+      });
+      btnSalvar.disabled = this.narrativaOcupado || temErro;
+      btnSalvar.onclick = () => { void this.salvarAlteracoesNarrativas(); };
+    }
   }
 
   private renderCronologiaProblemas(
