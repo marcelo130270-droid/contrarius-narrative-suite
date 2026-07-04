@@ -20,9 +20,18 @@ import type {
 import {
   construirCronologiaDupla,
   type CronologiaDuplaContrarius,
+  type ItemCronologiaContrarius,
   type ModoCronologiaContrarius,
   type ProblemaCronologiaContrarius,
 } from './timeline-model';
+import {
+  construirRoteiroNarrativo,
+  type CapituloRoteiroNarrativo,
+  type CenaRoteiroNarrativo,
+  type EntradaRoteiroNarrativo,
+  type ItemRoteiroNarrativo,
+  type LivroRoteiroNarrativo,
+} from './narrative-outline-model';
 import {
   construirVisaoCronologia,
   rotuloProblemaCronologia,
@@ -152,6 +161,7 @@ export class ContrariusDashboardView extends ItemView {
   private narrativaOrdemBruta: Map<string, string> = new Map();
   private narrativaRenumInicio = 1;
   private narrativaRenumPasso = 10;
+  private narrativaVisualizacao: 'lista' | 'roteiro' = 'lista';
 
   constructor(leaf: WorkspaceLeaf, app: App) {
     super(leaf);
@@ -1085,6 +1095,7 @@ export class ContrariusDashboardView extends ItemView {
 
     if (this.cronologiaMode === 'narrativa') {
       this.renderBotaoEditarNarrativa(container);
+      this.renderSeletorVisualizacaoNarrativa(container);
     }
 
     this.renderCronologiaSummary(container, visao);
@@ -1101,7 +1112,11 @@ export class ContrariusDashboardView extends ItemView {
       applyStyles(msg, { color: 'var(--text-muted)', padding: '12px 0' });
     }
 
-    this.renderCronologiaPosicionados(container, visao);
+    if (this.cronologiaMode === 'narrativa' && this.narrativaVisualizacao === 'roteiro') {
+      this.renderRoteiroPorCapitulo(container, visao);
+    } else {
+      this.renderCronologiaPosicionados(container, visao);
+    }
     this.renderCronologiaNaoPosicionados(container, visao);
 
     if (visao.problemas.length > 0) {
@@ -1276,6 +1291,150 @@ export class ContrariusDashboardView extends ItemView {
       attr: { 'aria-label': 'Editar ordem narrativa' },
     });
     btn.onclick = () => { this.iniciarEdicaoNarrativa(); };
+  }
+
+  private renderSeletorVisualizacaoNarrativa(container: HTMLElement): void {
+    const bar = container.createDiv();
+    applyStyles(bar, { display: 'flex', gap: '6px', marginBottom: '12px' });
+
+    const opcoes: ReadonlyArray<['lista' | 'roteiro', string]> = [
+      ['lista', 'Lista narrativa'],
+      ['roteiro', 'Roteiro por capítulo'],
+    ];
+    for (const [value, label] of opcoes) {
+      const active = this.narrativaVisualizacao === value;
+      const btn = bar.createEl('button', { text: label });
+      btn.setAttr('aria-pressed', String(active));
+      btn.disabled = this.narrativaEditando;
+      applyStyles(btn, {
+        background: active ? 'var(--interactive-accent)' : '',
+        color: active ? 'var(--text-on-accent)' : '',
+      });
+      btn.onclick = () => {
+        this.narrativaVisualizacao = value;
+        this.render();
+      };
+    }
+  }
+
+  private itemParaEntradaRoteiro(item: ItemCronologiaContrarius): EntradaRoteiroNarrativo {
+    const livro = item.livro.find((b) => b.trim() !== '') ?? '';
+    const livroChave = livro !== ''
+      ? livro.normalize('NFD').replace(/[̀-ͯ]/g, '').toLocaleLowerCase('pt-BR').replace(/\s+/g, ' ').trim()
+      : '';
+    return {
+      chave: `${item.filePath}:${item.id}`,
+      id: item.id,
+      titulo: item.titulo,
+      filePath: item.filePath,
+      livro,
+      livroChave,
+      ordemNarrativa: item.ordemNarrativa,
+      capitulo: item.capitulo,
+      cena: item.cena,
+    };
+  }
+
+  private renderRoteiroPorCapitulo(
+    container: HTMLElement,
+    visao: VisaoCronologiaContrarius,
+  ): void {
+    if (visao.posicionados.length === 0 && visao.totalVisivel > 0) {
+      const msg = container.createDiv({ text: 'Nenhum evento posicionado para o roteiro.' });
+      applyStyles(msg, { color: 'var(--text-muted)', padding: '8px 0' });
+      return;
+    }
+    if (visao.posicionados.length === 0) return;
+
+    const entradas = visao.posicionados.map((l) => this.itemParaEntradaRoteiro(l.item));
+    const roteiro = construirRoteiroNarrativo(entradas);
+
+    for (const livro of roteiro.livros) {
+      this.renderRoteiroLivro(container, livro);
+    }
+  }
+
+  private renderRoteiroLivro(container: HTMLElement, livro: LivroRoteiroNarrativo): void {
+    const livroDiv = container.createDiv();
+    livroDiv.addClass('ctr-roteiro-livro');
+    const heading = livroDiv.createEl('h3', { text: `${livro.titulo} (${livro.total})` });
+    applyStyles(heading, {
+      marginTop: '16px',
+      marginBottom: '8px',
+      paddingBottom: '6px',
+      borderBottom: '2px solid var(--background-modifier-border)',
+    });
+    for (const cap of livro.capitulos) {
+      this.renderRoteiroCapitulo(livroDiv, cap);
+    }
+  }
+
+  private renderRoteiroCapitulo(container: HTMLElement, cap: CapituloRoteiroNarrativo): void {
+    const capDiv = container.createDiv();
+    capDiv.addClass('ctr-roteiro-capitulo');
+    const heading = capDiv.createEl('h4', { text: `${cap.titulo} (${cap.total})` });
+    applyStyles(heading, { marginTop: '12px', marginBottom: '6px', color: 'var(--text-muted)' });
+    for (const cena of cap.cenas) {
+      this.renderRoteiroCena(capDiv, cena);
+    }
+    for (const item of cap.itensSemCena) {
+      this.renderRoteiroItem(capDiv, item);
+    }
+  }
+
+  private renderRoteiroCena(container: HTMLElement, cena: CenaRoteiroNarrativo): void {
+    const cenaDiv = container.createDiv();
+    cenaDiv.addClass('ctr-roteiro-cena');
+    const heading = cenaDiv.createEl('h5', { text: `Cena: ${cena.titulo} (${cena.total})` });
+    applyStyles(heading, {
+      marginTop: '8px',
+      marginBottom: '4px',
+      fontWeight: '500',
+      color: 'var(--text-muted)',
+      fontSize: '0.9em',
+    });
+    for (const item of cena.itens) {
+      this.renderRoteiroItem(cenaDiv, item);
+    }
+  }
+
+  private renderRoteiroItem(container: HTMLElement, item: ItemRoteiroNarrativo): void {
+    const card = container.createDiv();
+    card.addClass('ctr-roteiro-item');
+    applyStyles(card, { ...this.cardStyles(), position: 'relative' });
+
+    if (item.ordemNarrativa !== null) {
+      const posEl = card.createSpan({ text: `#${item.ordemNarrativa}` });
+      applyStyles(posEl, {
+        position: 'absolute',
+        top: '12px',
+        right: '12px',
+        color: 'var(--text-faint)',
+        fontSize: '0.78em',
+        fontWeight: '600',
+      });
+    }
+
+    const titleEl = card.createEl('h4', { text: item.titulo });
+    applyStyles(titleEl, { margin: '0 0 3px', paddingRight: '36px' });
+
+    const idEl = card.createDiv({ text: item.id });
+    applyStyles(idEl, { color: 'var(--text-muted)', fontSize: '0.85em', marginBottom: '8px' });
+
+    const btnRow = card.createDiv();
+    applyStyles(btnRow, { display: 'flex', gap: '8px', marginTop: '10px', flexWrap: 'wrap' });
+
+    const openBtn = btnRow.createEl('button', { text: 'Abrir nota' });
+    openBtn.onclick = () => { void this.openFile(item.filePath); };
+
+    if (!this.narrativaEditando) {
+      const verBtn = btnRow.createEl('button', { text: 'Ver ficha' });
+      verBtn.onclick = () => {
+        const key: ContrariusEntityKey = { tipoEntidade: 'evento', filePath: item.filePath };
+        this.detailNavState = abrirDetalheRaiz(key);
+        this.render();
+      };
+    }
   }
 
   private iniciarEdicaoNarrativa(): void {

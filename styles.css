@@ -3,6 +3,12 @@
    November 2, 2025
    ================================================================= */
 
+/* Roteiro narrativo por capítulo */
+.ctr-roteiro-livro { margin-bottom: 20px; }
+.ctr-roteiro-capitulo { margin-left: 8px; }
+.ctr-roteiro-cena { margin-left: 8px; }
+.ctr-roteiro-item { margin-left: 8px; }
+
 /* ============================================
    LEAFLET CSS IMPORT (if not bundled via esbuild)
    ============================================
