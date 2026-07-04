@@ -1,5 +1,9 @@
 import type { AlteracaoNarrativaEvento } from './narrative-order-model';
-import { aplicarPatchNarrativoEvento, ErroPatchFrontmatterEvento } from './evento-frontmatter-patcher';
+import {
+  aplicarPatchNarrativoEvento,
+  ErroPatchFrontmatterEvento,
+  type CodigoErroPatchFrontmatterEvento,
+} from './evento-frontmatter-patcher';
 
 export interface ArmazenamentoNotasNarrativas {
   ler(filePath: string): Promise<string>;
@@ -50,6 +54,7 @@ export interface DescricaoErroSalvamentoNarrativo {
   readonly acaoSugerida: string;
   readonly filePath: string;
   readonly etapa: EtapaErroSalvamentoNarrativo;
+  readonly codigoCausa?: CodigoErroPatchFrontmatterEvento;
 }
 
 function descreverErroPatch(
@@ -65,6 +70,7 @@ function descreverErroPatch(
         acaoSugerida: 'Estruture a nota com um bloco frontmatter (--- ... ---) antes de editar a ordem narrativa.',
         filePath,
         etapa,
+        codigoCausa: 'frontmatter_ausente',
       };
     case 'frontmatter_invalido':
       return {
@@ -73,6 +79,7 @@ function descreverErroPatch(
         acaoSugerida: 'Verifique se o frontmatter está bem formado e possui os delimitadores --- corretos.',
         filePath,
         etapa,
+        codigoCausa: 'frontmatter_invalido',
       };
     case 'chave_duplicada':
       return {
@@ -81,6 +88,7 @@ function descreverErroPatch(
         acaoSugerida: 'Remova a chave duplicada no frontmatter da nota antes de salvar.',
         filePath,
         etapa,
+        codigoCausa: 'chave_duplicada',
       };
     case 'valor_invalido':
       return {
@@ -89,6 +97,7 @@ function descreverErroPatch(
         acaoSugerida: 'Corrija o valor do campo no editor antes de salvar.',
         filePath,
         etapa,
+        codigoCausa: 'valor_invalido',
       };
   }
 }
