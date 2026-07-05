@@ -124,6 +124,12 @@ import {
   type ArquivoPacoteScrivenerRetornado,
   type DadosComparacaoPacoteScrivener,
 } from './scrivener-return-compare-model';
+import {
+  gerarPlanoPreImportacaoScrivener,
+  type ArquivoScrivenerPreImportacao,
+  type DadosPlanoPreImportacaoScrivener,
+  type NotaOriginalPreImportacao,
+} from './scrivener-preimport-plan-model';
 
 export const VIEW_TYPE_CONTRARIUS_DASHBOARD = 'contrarius-knowledge-dashboard';
 
@@ -1344,6 +1350,13 @@ export class ContrariusDashboardView extends ItemView {
     });
     btnComparar.disabled = this.narrativaEditando || this.narrativaRevisando || this.narrativaOcupado;
     btnComparar.onclick = () => { void this.compararPacoteScrivener(); };
+
+    const btnPlano = bar.createEl('button', {
+      text: 'Gerar plano de retorno Scrivener',
+      attr: { 'aria-label': 'Gerar plano de pré-importação Scrivener' },
+    });
+    btnPlano.disabled = this.narrativaEditando || this.narrativaRevisando || this.narrativaOcupado;
+    btnPlano.onclick = () => { void this.gerarPlanoRetornoScrivener(); };
   }
 
   private renderSeletorVisualizacaoNarrativa(container: HTMLElement): void {
@@ -2498,6 +2511,120 @@ export class ContrariusDashboardView extends ItemView {
         arquivos.push({ caminhoRelativo, conteudo });
       } else if (filho instanceof TFolder) {
         await this.lerArquivosPacoteScrivener(filho, pastaRaiz, arquivos);
+      }
+    }
+  }
+
+  private async gerarPlanoRetornoScrivener(): Promise<void> {
+    try {
+      const pastaBase = '12_Export/Scrivener';
+      const pastaBaseAbs = this.obsidianApp.vault.getAbstractFileByPath(pastaBase);
+
+      if (!(pastaBaseAbs instanceof TFolder)) {
+        new Notice('Nenhum pacote Scrivener encontrado para gerar plano.');
+        return;
+      }
+
+      let pastaEscolhida: TFolder | null = null;
+      let maiorMtime = -Infinity;
+
+      for (const filho of pastaBaseAbs.children) {
+        if (!(filho instanceof TFolder)) continue;
+        const manifestoPath = `${filho.path}/contrarius-manifest.json`;
+        const manifestoFile = this.obsidianApp.vault.getAbstractFileByPath(manifestoPath);
+        if (!(manifestoFile instanceof TFile)) continue;
+        if (manifestoFile.stat.mtime > maiorMtime) {
+          maiorMtime = manifestoFile.stat.mtime;
+          pastaEscolhida = filho;
+        }
+      }
+
+      if (pastaEscolhida === null) {
+        new Notice('Nenhum pacote Scrivener encontrado para gerar plano.');
+        return;
+      }
+
+      const manifestoFile = this.obsidianApp.vault.getAbstractFileByPath(
+        `${pastaEscolhida.path}/contrarius-manifest.json`,
+      );
+      let manifestoJson = '';
+      if (manifestoFile instanceof TFile) {
+        manifestoJson = await this.obsidianApp.vault.read(manifestoFile);
+      }
+
+      const arquivosScrivener: ArquivoScrivenerPreImportacao[] = [];
+      await this.lerArquivosMarkdownPacote(pastaEscolhida, pastaEscolhida.path, arquivosScrivener);
+
+      const notasOriginais: NotaOriginalPreImportacao[] = [];
+      let manifestoRawPlano: unknown;
+      try {
+        manifestoRawPlano = JSON.parse(manifestoJson);
+      } catch {
+        manifestoRawPlano = null;
+      }
+      if (
+        typeof manifestoRawPlano === 'object' &&
+        manifestoRawPlano !== null &&
+        !Array.isArray(manifestoRawPlano)
+      ) {
+        const arquivosM = (manifestoRawPlano as Record<string, unknown>)['arquivos'];
+        if (Array.isArray(arquivosM)) {
+          const notasLidas = new Set<string>();
+          for (const entrada of arquivosM) {
+            if (typeof entrada !== 'object' || entrada === null || Array.isArray(entrada)) continue;
+            const fp = (entrada as Record<string, unknown>)['filePath'];
+            if (typeof fp !== 'string' || fp.trim() === '') continue;
+            if (notasLidas.has(fp)) continue;
+            const notaFile = this.obsidianApp.vault.getAbstractFileByPath(fp);
+            if (notaFile instanceof TFile) {
+              const conteudo = await this.obsidianApp.vault.read(notaFile);
+              notasOriginais.push({ filePath: fp, conteudo });
+              notasLidas.add(fp);
+            }
+          }
+        }
+      }
+
+      const agora = new Date();
+      const pad2 = (n: number): string => String(n).padStart(2, '0');
+      const geradoEm = `${agora.getFullYear()}-${pad2(agora.getMonth() + 1)}-${pad2(agora.getDate())} ${pad2(agora.getHours())}:${pad2(agora.getMinutes())}`;
+
+      const dadosPlano: DadosPlanoPreImportacaoScrivener = {
+        manifestoJson,
+        arquivosScrivener,
+        notasOriginais,
+        geradoEm,
+      };
+
+      const resultado = gerarPlanoPreImportacaoScrivener(dadosPlano);
+
+      const nomeBase = 'PLANO_PRE_IMPORTACAO';
+      let caminhoRelatorio = `${pastaEscolhida.path}/${nomeBase}.md`;
+      let sufixo = 2;
+      while (this.obsidianApp.vault.getAbstractFileByPath(caminhoRelatorio) !== null) {
+        caminhoRelatorio = `${pastaEscolhida.path}/${nomeBase}-${sufixo}.md`;
+        sufixo++;
+      }
+
+      await this.obsidianApp.vault.create(caminhoRelatorio, resultado.relatorioMarkdown);
+      new Notice(`Plano de retorno Scrivener gerado: ${caminhoRelatorio}`);
+    } catch (e) {
+      new Notice('Não foi possível gerar o plano de retorno Scrivener.');
+    }
+  }
+
+  private async lerArquivosMarkdownPacote(
+    pasta: TFolder,
+    pastaRaiz: string,
+    arquivos: ArquivoScrivenerPreImportacao[],
+  ): Promise<void> {
+    for (const filho of pasta.children) {
+      if (filho instanceof TFile && filho.extension === 'md') {
+        const caminhoRelativo = filho.path.slice(pastaRaiz.length + 1);
+        const conteudo = await this.obsidianApp.vault.read(filho);
+        arquivos.push({ caminhoRelativo, conteudo });
+      } else if (filho instanceof TFolder) {
+        await this.lerArquivosMarkdownPacote(filho, pastaRaiz, arquivos);
       }
     }
   }
