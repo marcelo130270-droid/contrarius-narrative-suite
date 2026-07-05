@@ -114,6 +114,10 @@ import {
   type EventoExportacaoScrivener,
   type ProblemaExportacaoScrivener,
 } from './scrivener-export-model';
+import {
+  validarPacoteScrivenerMarkdown,
+  resumirValidacaoPacoteScrivener,
+} from './scrivener-export-validation-model';
 
 export const VIEW_TYPE_CONTRARIUS_DASHBOARD = 'contrarius-knowledge-dashboard';
 
@@ -2344,6 +2348,21 @@ export class ContrariusDashboardView extends ItemView {
 
     const pacote = gerarPacoteScrivenerMarkdown(dados);
 
+    const validacao = validarPacoteScrivenerMarkdown(pacote);
+    if (validacao.erros.length > 0) {
+      new Notice(`Pacote Scrivener inválido: ${resumirValidacaoPacoteScrivener(validacao)}`);
+      for (const problema of validacao.erros) {
+        console.error(`[Contrarius] ${problema.codigo}: ${problema.mensagem}${problema.caminhoRelativo !== undefined ? ` (${problema.caminhoRelativo})` : ''}`);
+      }
+      return;
+    }
+
+    if (validacao.avisos.length > 0) {
+      for (const a of validacao.avisos) {
+        console.warn(`[Contrarius] ${a.codigo}: ${a.mensagem}`);
+      }
+    }
+
     try {
       const pastaBase = '12_Export/Scrivener';
       await this.garantirPastaScrivener(pastaBase);
@@ -2367,6 +2386,9 @@ export class ContrariusDashboardView extends ItemView {
       }
 
       new Notice(`Pacote Scrivener exportado: ${pastaFinal}`);
+      if (validacao.avisos.length > 0) {
+        new Notice(`Scrivener: ${resumirValidacaoPacoteScrivener(validacao)}`);
+      }
     } catch (e) {
       new Notice('Não foi possível exportar o pacote Scrivener.');
     }
