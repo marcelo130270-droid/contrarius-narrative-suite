@@ -130,6 +130,12 @@ import {
   type DadosPlanoPreImportacaoScrivener,
   type NotaOriginalPreImportacao,
 } from './scrivener-preimport-plan-model';
+import {
+  gerarPreviaAplicacaoScrivener,
+  type ArquivoScrivenerPreviaAplicacao,
+  type DadosPreviaAplicacaoScrivener,
+  type NotaOriginalPreviaAplicacao,
+} from './scrivener-apply-preview-model';
 
 export const VIEW_TYPE_CONTRARIUS_DASHBOARD = 'contrarius-knowledge-dashboard';
 
@@ -1357,6 +1363,13 @@ export class ContrariusDashboardView extends ItemView {
     });
     btnPlano.disabled = this.narrativaEditando || this.narrativaRevisando || this.narrativaOcupado;
     btnPlano.onclick = () => { void this.gerarPlanoRetornoScrivener(); };
+
+    const btnPrevia = bar.createEl('button', {
+      text: 'Gerar prévia de aplicação Scrivener',
+      attr: { 'aria-label': 'Gerar prévia de aplicação Scrivener' },
+    });
+    btnPrevia.disabled = this.narrativaEditando || this.narrativaRevisando || this.narrativaOcupado;
+    btnPrevia.onclick = () => { void this.gerarPreviaRetornoScrivener(); };
   }
 
   private renderSeletorVisualizacaoNarrativa(container: HTMLElement): void {
@@ -2625,6 +2638,120 @@ export class ContrariusDashboardView extends ItemView {
         arquivos.push({ caminhoRelativo, conteudo });
       } else if (filho instanceof TFolder) {
         await this.lerArquivosMarkdownPacote(filho, pastaRaiz, arquivos);
+      }
+    }
+  }
+
+  private async gerarPreviaRetornoScrivener(): Promise<void> {
+    try {
+      const pastaBase = '12_Export/Scrivener';
+      const pastaBaseAbs = this.obsidianApp.vault.getAbstractFileByPath(pastaBase);
+
+      if (!(pastaBaseAbs instanceof TFolder)) {
+        new Notice('Nenhum pacote Scrivener encontrado para gerar prévia.');
+        return;
+      }
+
+      let pastaEscolhida: TFolder | null = null;
+      let maiorMtime = -Infinity;
+
+      for (const filho of pastaBaseAbs.children) {
+        if (!(filho instanceof TFolder)) continue;
+        const manifestoPath = `${filho.path}/contrarius-manifest.json`;
+        const manifestoFile = this.obsidianApp.vault.getAbstractFileByPath(manifestoPath);
+        if (!(manifestoFile instanceof TFile)) continue;
+        if (manifestoFile.stat.mtime > maiorMtime) {
+          maiorMtime = manifestoFile.stat.mtime;
+          pastaEscolhida = filho;
+        }
+      }
+
+      if (pastaEscolhida === null) {
+        new Notice('Nenhum pacote Scrivener encontrado para gerar prévia.');
+        return;
+      }
+
+      const manifestoFile = this.obsidianApp.vault.getAbstractFileByPath(
+        `${pastaEscolhida.path}/contrarius-manifest.json`,
+      );
+      let manifestoJson = '';
+      if (manifestoFile instanceof TFile) {
+        manifestoJson = await this.obsidianApp.vault.read(manifestoFile);
+      }
+
+      const arquivosScrivener: ArquivoScrivenerPreviaAplicacao[] = [];
+      await this.lerArquivosMarkdownPacotePrevia(pastaEscolhida, pastaEscolhida.path, arquivosScrivener);
+
+      const notasOriginais: NotaOriginalPreviaAplicacao[] = [];
+      let manifestoRawPrevia: unknown;
+      try {
+        manifestoRawPrevia = JSON.parse(manifestoJson);
+      } catch {
+        manifestoRawPrevia = null;
+      }
+      if (
+        typeof manifestoRawPrevia === 'object' &&
+        manifestoRawPrevia !== null &&
+        !Array.isArray(manifestoRawPrevia)
+      ) {
+        const arquivosM = (manifestoRawPrevia as Record<string, unknown>)['arquivos'];
+        if (Array.isArray(arquivosM)) {
+          const notasLidas = new Set<string>();
+          for (const entrada of arquivosM) {
+            if (typeof entrada !== 'object' || entrada === null || Array.isArray(entrada)) continue;
+            const fp = (entrada as Record<string, unknown>)['filePath'];
+            if (typeof fp !== 'string' || fp.trim() === '') continue;
+            if (notasLidas.has(fp)) continue;
+            const notaFile = this.obsidianApp.vault.getAbstractFileByPath(fp);
+            if (notaFile instanceof TFile) {
+              const conteudo = await this.obsidianApp.vault.read(notaFile);
+              notasOriginais.push({ filePath: fp, conteudo });
+              notasLidas.add(fp);
+            }
+          }
+        }
+      }
+
+      const agora = new Date();
+      const pad2 = (n: number): string => String(n).padStart(2, '0');
+      const geradoEm = `${agora.getFullYear()}-${pad2(agora.getMonth() + 1)}-${pad2(agora.getDate())} ${pad2(agora.getHours())}:${pad2(agora.getMinutes())}`;
+
+      const dadosPrevia: DadosPreviaAplicacaoScrivener = {
+        manifestoJson,
+        arquivosScrivener,
+        notasOriginais,
+        geradoEm,
+      };
+
+      const resultado = gerarPreviaAplicacaoScrivener(dadosPrevia);
+
+      const nomeBase = 'PREVIA_APLICACAO_SCRIVENER';
+      let caminhoRelatorio = `${pastaEscolhida.path}/${nomeBase}.md`;
+      let sufixo = 2;
+      while (this.obsidianApp.vault.getAbstractFileByPath(caminhoRelatorio) !== null) {
+        caminhoRelatorio = `${pastaEscolhida.path}/${nomeBase}-${sufixo}.md`;
+        sufixo++;
+      }
+
+      await this.obsidianApp.vault.create(caminhoRelatorio, resultado.relatorioMarkdown);
+      new Notice(`Prévia de aplicação Scrivener gerada: ${caminhoRelatorio}`);
+    } catch (e) {
+      new Notice('Não foi possível gerar a prévia de aplicação Scrivener.');
+    }
+  }
+
+  private async lerArquivosMarkdownPacotePrevia(
+    pasta: TFolder,
+    pastaRaiz: string,
+    arquivos: ArquivoScrivenerPreviaAplicacao[],
+  ): Promise<void> {
+    for (const filho of pasta.children) {
+      if (filho instanceof TFile && filho.extension === 'md') {
+        const caminhoRelativo = filho.path.slice(pastaRaiz.length + 1);
+        const conteudo = await this.obsidianApp.vault.read(filho);
+        arquivos.push({ caminhoRelativo, conteudo });
+      } else if (filho instanceof TFolder) {
+        await this.lerArquivosMarkdownPacotePrevia(filho, pastaRaiz, arquivos);
       }
     }
   }
