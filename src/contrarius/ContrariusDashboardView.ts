@@ -108,6 +108,12 @@ import {
   type EventoExportacaoNarrativa,
   type ProblemaExportacaoNarrativa,
 } from './narrative-outline-export-model';
+import {
+  gerarPacoteScrivenerMarkdown,
+  type DadosPacoteScrivener,
+  type EventoExportacaoScrivener,
+  type ProblemaExportacaoScrivener,
+} from './scrivener-export-model';
 
 export const VIEW_TYPE_CONTRARIUS_DASHBOARD = 'contrarius-knowledge-dashboard';
 
@@ -1314,6 +1320,13 @@ export class ContrariusDashboardView extends ItemView {
     });
     btnExportar.disabled = this.narrativaEditando || this.narrativaRevisando || this.narrativaOcupado;
     btnExportar.onclick = () => { void this.exportarRoteiroNarrativo(); };
+
+    const btnScrivener = bar.createEl('button', {
+      text: 'Exportar pacote Scrivener',
+      attr: { 'aria-label': 'Exportar pacote de arquivos Markdown para o Scrivener' },
+    });
+    btnScrivener.disabled = this.narrativaEditando || this.narrativaRevisando || this.narrativaOcupado;
+    btnScrivener.onclick = () => { void this.exportarPacoteScrivener(); };
   }
 
   private renderSeletorVisualizacaoNarrativa(container: HTMLElement): void {
@@ -2256,6 +2269,118 @@ export class ContrariusDashboardView extends ItemView {
       new Notice(`Roteiro narrativo exportado: ${caminhoFinal}`);
     } catch (e) {
       new Notice('Não foi possível exportar o roteiro narrativo.');
+    }
+  }
+
+  private async exportarPacoteScrivener(): Promise<void> {
+    if (this.currentCronologia === null) return;
+
+    const filtroExportacao: FiltroVisaoCronologia = {
+      modo: 'narrativa',
+      livro: this.cronologiaLivro,
+      consulta: '',
+    };
+    const visao = construirVisaoCronologia(this.currentCronologia, filtroExportacao);
+
+    const opcaoLivro = visao.livros.find((l) => l.chave === this.cronologiaLivro);
+    const filtroLivroRotulo =
+      opcaoLivro !== undefined ? opcaoLivro.rotulo : this.cronologiaLivro;
+
+    const eventosPosicionados: EventoExportacaoScrivener[] = visao.posicionados.map((l) => {
+      const item = l.item;
+      const livro = item.livro.find((b) => b.trim() !== '') ?? '';
+      return {
+        chave: `${item.filePath}:${item.id}`,
+        id: item.id,
+        titulo: item.titulo,
+        filePath: item.filePath,
+        livro,
+        ordemNarrativa: item.ordemNarrativa,
+        capitulo: item.capitulo,
+        cena: item.cena,
+      };
+    });
+
+    const eventosSemOrdem: EventoExportacaoScrivener[] = visao.naoPosicionados.map((l) => {
+      const item = l.item;
+      const livro = item.livro.find((b) => b.trim() !== '') ?? '';
+      return {
+        chave: `${item.filePath}:${item.id}`,
+        id: item.id,
+        titulo: item.titulo,
+        filePath: item.filePath,
+        livro,
+        ordemNarrativa: item.ordemNarrativa,
+        capitulo: item.capitulo,
+        cena: item.cena,
+      };
+    });
+
+    const problemas: ProblemaExportacaoScrivener[] = visao.problemas.map((p) => ({
+      nivel: p.nivel,
+      mensagem: p.mensagem,
+      relacionados: p.relacionados,
+    }));
+
+    const agora = new Date();
+    const pad2 = (n: number): string => String(n).padStart(2, '0');
+    const geradoEm = `${agora.getFullYear()}-${pad2(agora.getMonth() + 1)}-${pad2(agora.getDate())} ${pad2(agora.getHours())}:${pad2(agora.getMinutes())}`;
+    const tsArquivo = `${agora.getFullYear()}${pad2(agora.getMonth() + 1)}${pad2(agora.getDate())}-${pad2(agora.getHours())}${pad2(agora.getMinutes())}${pad2(agora.getSeconds())}`;
+
+    const tituloExport =
+      filtroLivroRotulo !== 'Todos os livros'
+        ? `Pacote Scrivener — ${filtroLivroRotulo}`
+        : 'Pacote Scrivener';
+
+    const dados: DadosPacoteScrivener = {
+      titulo: tituloExport,
+      filtroLivro: filtroLivroRotulo,
+      busca: this.query.trim(),
+      geradoEm,
+      eventosPosicionados,
+      eventosSemOrdem,
+      problemas,
+    };
+
+    const pacote = gerarPacoteScrivenerMarkdown(dados);
+
+    try {
+      const pastaBase = '12_Export/Scrivener';
+      await this.garantirPastaScrivener(pastaBase);
+
+      const nomeSubpasta = `roteiro-scrivener-${tsArquivo}`;
+      let pastaFinal = `${pastaBase}/${nomeSubpasta}`;
+      let sufixo = 2;
+      while (this.obsidianApp.vault.getAbstractFileByPath(pastaFinal) !== null) {
+        pastaFinal = `${pastaBase}/${nomeSubpasta}-${String(sufixo).padStart(2, '0')}`;
+        sufixo++;
+      }
+      await this.obsidianApp.vault.createFolder(pastaFinal);
+
+      for (const arquivo of pacote.arquivos) {
+        const caminhoCompleto = `${pastaFinal}/${arquivo.caminhoRelativo}`;
+        const ultimaBarra = caminhoCompleto.lastIndexOf('/');
+        if (ultimaBarra > 0) {
+          await this.garantirPastaScrivener(caminhoCompleto.slice(0, ultimaBarra));
+        }
+        await this.obsidianApp.vault.create(caminhoCompleto, arquivo.conteudo);
+      }
+
+      new Notice(`Pacote Scrivener exportado: ${pastaFinal}`);
+    } catch (e) {
+      new Notice('Não foi possível exportar o pacote Scrivener.');
+    }
+  }
+
+  private async garantirPastaScrivener(caminho: string): Promise<void> {
+    if (this.obsidianApp.vault.getAbstractFileByPath(caminho) !== null) return;
+    const partes = caminho.split('/');
+    let atual = '';
+    for (const parte of partes) {
+      atual = atual === '' ? parte : `${atual}/${parte}`;
+      if (this.obsidianApp.vault.getAbstractFileByPath(atual) === null) {
+        await this.obsidianApp.vault.createFolder(atual);
+      }
     }
   }
 
