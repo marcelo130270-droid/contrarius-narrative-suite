@@ -55,10 +55,63 @@ function roteiro(pacote: ReturnType<typeof gerarPacoteScrivenerMarkdown>): strin
   return f?.conteudo ?? '';
 }
 
+const ARQUIVOS_CONTROLE = new Set([
+  '00_ROTEIRO.md',
+  'contrarius-manifest.json',
+  'README_IMPORTACAO_SCRIVENER.md',
+]);
+
 function arquivosEvento(
   pacote: ReturnType<typeof gerarPacoteScrivenerMarkdown>,
 ): ReturnType<typeof gerarPacoteScrivenerMarkdown>['arquivos'] {
-  return pacote.arquivos.filter((a) => a.caminhoRelativo !== '00_ROTEIRO.md');
+  return pacote.arquivos.filter((a) => !ARQUIVOS_CONTROLE.has(a.caminhoRelativo));
+}
+
+interface ArquivoManifestoEntry {
+  tipo: string;
+  caminhoRelativo: string;
+  chave: string;
+  id: string;
+  titulo: string;
+  filePath: string;
+  livro: string;
+  capitulo: string;
+  cena: string;
+  ordemNarrativa: number | null;
+}
+
+interface ProblemaManifestoEntry {
+  nivel: string;
+  mensagem: string;
+  relacionados: string[];
+}
+
+interface ManifestoParseado {
+  tipo: string;
+  versao: number;
+  titulo: string;
+  filtroLivro: string;
+  busca: string;
+  geradoEm: string;
+  totais: {
+    eventosPosicionados: number;
+    eventosSemOrdem: number;
+    problemas: number;
+  };
+  arquivos: ArquivoManifestoEntry[];
+  problemas: ProblemaManifestoEntry[];
+}
+
+function parseManifesto(
+  pacote: ReturnType<typeof gerarPacoteScrivenerMarkdown>,
+): ManifestoParseado {
+  const f = pacote.arquivos.find((a) => a.caminhoRelativo === 'contrarius-manifest.json');
+  return JSON.parse(f?.conteudo ?? '{}') as ManifestoParseado;
+}
+
+function readmeConteudo(pacote: ReturnType<typeof gerarPacoteScrivenerMarkdown>): string {
+  const f = pacote.arquivos.find((a) => a.caminhoRelativo === 'README_IMPORTACAO_SCRIVENER.md');
+  return f?.conteudo ?? '';
 }
 
 // ─── Testes ───────────────────────────────────────────────────────────────────
@@ -66,7 +119,7 @@ function arquivosEvento(
 describe('gerarPacoteScrivenerMarkdown', () => {
   it('1. pacote vazio', () => {
     const pacote = gerarPacoteScrivenerMarkdown(makeDados());
-    expect(pacote.arquivos.length).toBe(1);
+    expect(pacote.arquivos.length).toBe(3);
     expect(pacote.arquivos[0].caminhoRelativo).toBe('00_ROTEIRO.md');
   });
 
@@ -353,5 +406,202 @@ describe('gerarPacoteScrivenerMarkdown', () => {
     const posA = eventos[1]?.caminhoRelativo ?? '';
     expect(posZ).toContain('e-z');
     expect(posA).toContain('e-a');
+  });
+
+  // ─── Manifesto e README (Fase 3C.3) ─────────────────────────────────────────
+
+  it('M1. pacote inclui contrarius-manifest.json', () => {
+    const pacote = gerarPacoteScrivenerMarkdown(makeDados());
+    const caminhos = pacote.arquivos.map((a) => a.caminhoRelativo);
+    expect(caminhos).toContain('contrarius-manifest.json');
+  });
+
+  it('M2. manifesto é JSON parseável', () => {
+    const pacote = gerarPacoteScrivenerMarkdown(makeDados());
+    expect(() => parseManifesto(pacote)).not.toThrow();
+  });
+
+  it('M3. manifesto tem tipo', () => {
+    const pacote = gerarPacoteScrivenerMarkdown(makeDados());
+    expect(parseManifesto(pacote).tipo).toBe('contrarius-scrivener-export');
+  });
+
+  it('M4. manifesto tem versao', () => {
+    const pacote = gerarPacoteScrivenerMarkdown(makeDados());
+    expect(parseManifesto(pacote).versao).toBe(1);
+  });
+
+  it('M5. manifesto tem totais corretos', () => {
+    const dados = makeDados({
+      eventosPosicionados: [makeEvento({ chave: 'c1' }), makeEvento({ chave: 'c2' })],
+      eventosSemOrdem: [makeEvento({ chave: 'c3', ordemNarrativa: null })],
+      problemas: [makeProblema()],
+    });
+    const m = parseManifesto(gerarPacoteScrivenerMarkdown(dados));
+    expect(m.totais.eventosPosicionados).toBe(2);
+    expect(m.totais.eventosSemOrdem).toBe(1);
+    expect(m.totais.problemas).toBe(1);
+  });
+
+  it('M6. manifesto inclui evento posicionado', () => {
+    const pacote = gerarPacoteScrivenerMarkdown(makeDados({ eventosPosicionados: [makeEvento()] }));
+    const m = parseManifesto(pacote);
+    expect(m.arquivos.some((a) => a.tipo === 'evento_posicionado')).toBe(true);
+  });
+
+  it('M7. manifesto inclui evento sem ordem', () => {
+    const e = makeEvento({ ordemNarrativa: null });
+    const pacote = gerarPacoteScrivenerMarkdown(makeDados({ eventosSemOrdem: [e] }));
+    const m = parseManifesto(pacote);
+    expect(m.arquivos.some((a) => a.tipo === 'evento_sem_ordem')).toBe(true);
+  });
+
+  it('M8. manifesto preserva ordem dos eventos', () => {
+    const e1 = makeEvento({ chave: 'c1', id: 'E-Z', titulo: 'Z Evento', ordemNarrativa: 30 });
+    const e2 = makeEvento({ chave: 'c2', id: 'E-A', titulo: 'A Evento', ordemNarrativa: 10 });
+    const m = parseManifesto(
+      gerarPacoteScrivenerMarkdown(makeDados({ eventosPosicionados: [e1, e2] })),
+    );
+    expect(m.arquivos[0]?.id).toBe('E-Z');
+    expect(m.arquivos[1]?.id).toBe('E-A');
+  });
+
+  it('M9. manifesto usa caminho relativo igual ao arquivo gerado', () => {
+    const pacote = gerarPacoteScrivenerMarkdown(makeDados({ eventosPosicionados: [makeEvento()] }));
+    const m = parseManifesto(pacote);
+    expect(m.arquivos[0]?.caminhoRelativo).toBe(arquivosEvento(pacote)[0]?.caminhoRelativo);
+  });
+
+  it('M10. manifesto inclui problemas', () => {
+    const p = makeProblema({ mensagem: 'Teste de problema' });
+    const m = parseManifesto(gerarPacoteScrivenerMarkdown(makeDados({ problemas: [p] })));
+    expect(m.problemas.length).toBe(1);
+    expect(m.problemas[0]?.mensagem).toBe('Teste de problema');
+  });
+
+  it('M11. manifesto preserva Unicode', () => {
+    const e = makeEvento({ titulo: 'Cena em Ação', livro: 'Livré Três' });
+    const pacote = gerarPacoteScrivenerMarkdown(makeDados({ eventosPosicionados: [e] }));
+    const conteudo =
+      pacote.arquivos.find((a) => a.caminhoRelativo === 'contrarius-manifest.json')?.conteudo ?? '';
+    expect(conteudo).toContain('Cena em Ação');
+    expect(conteudo).toContain('Livré Três');
+  });
+
+  it('M12. manifesto usa null para ordem ausente', () => {
+    const e = makeEvento({ ordemNarrativa: null });
+    const m = parseManifesto(gerarPacoteScrivenerMarkdown(makeDados({ eventosSemOrdem: [e] })));
+    expect(m.arquivos[0]?.ordemNarrativa).toBeNull();
+  });
+
+  it('M13. manifesto não contém undefined', () => {
+    const dados = makeDados({
+      eventosPosicionados: [makeEvento({ chave: 'c1' })],
+      eventosSemOrdem: [makeEvento({ chave: 'c2', ordemNarrativa: null })],
+      problemas: [makeProblema()],
+    });
+    const pacote = gerarPacoteScrivenerMarkdown(dados);
+    const conteudo =
+      pacote.arquivos.find((a) => a.caminhoRelativo === 'contrarius-manifest.json')?.conteudo ?? '';
+    expect(conteudo).not.toContain('undefined');
+  });
+
+  it('M14. manifesto não contém [object Object]', () => {
+    const dados = makeDados({
+      eventosPosicionados: [makeEvento({ chave: 'c1' })],
+      eventosSemOrdem: [makeEvento({ chave: 'c2', ordemNarrativa: null })],
+      problemas: [makeProblema()],
+    });
+    const pacote = gerarPacoteScrivenerMarkdown(dados);
+    const conteudo =
+      pacote.arquivos.find((a) => a.caminhoRelativo === 'contrarius-manifest.json')?.conteudo ?? '';
+    expect(conteudo).not.toContain('[object Object]');
+  });
+
+  it('M15. pacote inclui README_IMPORTACAO_SCRIVENER.md', () => {
+    const pacote = gerarPacoteScrivenerMarkdown(makeDados());
+    expect(pacote.arquivos.map((a) => a.caminhoRelativo)).toContain(
+      'README_IMPORTACAO_SCRIVENER.md',
+    );
+  });
+
+  it('M16. README diz que notas originais não foram alteradas', () => {
+    const pacote = gerarPacoteScrivenerMarkdown(makeDados());
+    expect(readmeConteudo(pacote)).toContain('não foram alteradas');
+  });
+
+  it('M17. README menciona manifesto', () => {
+    const pacote = gerarPacoteScrivenerMarkdown(makeDados());
+    expect(readmeConteudo(pacote)).toContain('contrarius-manifest.json');
+  });
+
+  it('M18. README menciona placeholder Scrivener', () => {
+    const pacote = gerarPacoteScrivenerMarkdown(makeDados());
+    expect(readmeConteudo(pacote)).toContain('[preencher no Scrivener]');
+  });
+
+  it('M19. README traz contagens', () => {
+    const dados = makeDados({
+      eventosPosicionados: [makeEvento({ chave: 'c1' })],
+      eventosSemOrdem: [makeEvento({ chave: 'c2', ordemNarrativa: null })],
+    });
+    const readme = readmeConteudo(gerarPacoteScrivenerMarkdown(dados));
+    expect(readme).toContain('Eventos posicionados: 1');
+    expect(readme).toContain('Eventos sem ordem: 1');
+  });
+
+  it('M20. 00_ROTEIRO.md aponta para manifesto', () => {
+    const pacote = gerarPacoteScrivenerMarkdown(makeDados());
+    expect(roteiro(pacote)).toContain('contrarius-manifest.json');
+  });
+
+  it('M21. 00_ROTEIRO.md aponta para README', () => {
+    const pacote = gerarPacoteScrivenerMarkdown(makeDados());
+    expect(roteiro(pacote)).toContain('README_IMPORTACAO_SCRIVENER.md');
+  });
+
+  it('M22. todos os arquivos continuam terminando com quebra de linha', () => {
+    const pacote = gerarPacoteScrivenerMarkdown(
+      makeDados({
+        eventosPosicionados: [makeEvento({ chave: 'c1' })],
+        eventosSemOrdem: [makeEvento({ chave: 'c2', ordemNarrativa: null })],
+        problemas: [makeProblema()],
+      }),
+    );
+    for (const arq of pacote.arquivos) {
+      expect(arq.conteudo.endsWith('\n')).toBe(true);
+    }
+  });
+
+  it('M23. chamadas repetidas continuam equivalentes', () => {
+    const dados = makeDados({
+      eventosPosicionados: [makeEvento({ chave: 'c1' })],
+      eventosSemOrdem: [makeEvento({ chave: 'c2', ordemNarrativa: null })],
+      problemas: [makeProblema()],
+    });
+    const r1 = gerarPacoteScrivenerMarkdown(dados);
+    const r2 = gerarPacoteScrivenerMarkdown(dados);
+    expect(r1.arquivos.length).toBe(r2.arquivos.length);
+    for (let i = 0; i < r1.arquivos.length; i++) {
+      expect(r1.arquivos[i]?.caminhoRelativo).toBe(r2.arquivos[i]?.caminhoRelativo);
+      expect(r1.arquivos[i]?.conteudo).toBe(r2.arquivos[i]?.conteudo);
+    }
+  });
+
+  it('M24. entradas continuam não mutadas', () => {
+    const posicionados: EventoExportacaoScrivener[] = [makeEvento({ chave: 'c1' })];
+    const semOrdem: EventoExportacaoScrivener[] = [
+      makeEvento({ chave: 'c2', ordemNarrativa: null }),
+    ];
+    const problemas: ProblemaExportacaoScrivener[] = [makeProblema()];
+    const copiaPosicionados = posicionados.map((e) => ({ ...e }));
+    const copiaSemOrdem = semOrdem.map((e) => ({ ...e }));
+    const copiaProblemas = problemas.map((p) => ({ ...p }));
+    gerarPacoteScrivenerMarkdown(
+      makeDados({ eventosPosicionados: posicionados, eventosSemOrdem: semOrdem, problemas }),
+    );
+    expect(posicionados).toEqual(copiaPosicionados);
+    expect(semOrdem).toEqual(copiaSemOrdem);
+    expect(problemas).toEqual(copiaProblemas);
   });
 });
