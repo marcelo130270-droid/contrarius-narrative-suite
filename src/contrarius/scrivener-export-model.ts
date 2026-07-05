@@ -197,6 +197,123 @@ interface MetaArquivoEvento {
   readonly posicionado: boolean;
 }
 
+// ─── Manifesto ────────────────────────────────────────────────────────────────
+
+interface EntradaManifestoEvento {
+  readonly tipo: 'evento_posicionado' | 'evento_sem_ordem';
+  readonly caminhoRelativo: string;
+  readonly chave: string;
+  readonly id: string;
+  readonly titulo: string;
+  readonly filePath: string;
+  readonly livro: string;
+  readonly capitulo: string;
+  readonly cena: string;
+  readonly ordemNarrativa: number | null;
+}
+
+interface EntradaManifestoProblema {
+  readonly nivel: 'aviso' | 'erro';
+  readonly mensagem: string;
+  readonly relacionados: string[];
+}
+
+interface ManifestoScrivener {
+  readonly tipo: 'contrarius-scrivener-export';
+  readonly versao: 1;
+  readonly titulo: string;
+  readonly filtroLivro: string;
+  readonly busca: string;
+  readonly geradoEm: string;
+  readonly totais: {
+    readonly eventosPosicionados: number;
+    readonly eventosSemOrdem: number;
+    readonly problemas: number;
+  };
+  readonly arquivos: EntradaManifestoEvento[];
+  readonly problemas: EntradaManifestoProblema[];
+}
+
+function gerarManifesto(
+  dados: DadosPacoteScrivener,
+  metaArquivos: readonly MetaArquivoEvento[],
+): string {
+  const arquivos: EntradaManifestoEvento[] = metaArquivos.map(
+    ({ caminho, evento, posicionado }): EntradaManifestoEvento => {
+      const tipo: 'evento_posicionado' | 'evento_sem_ordem' = posicionado
+        ? 'evento_posicionado'
+        : 'evento_sem_ordem';
+      const ordemNarrativa =
+        evento.ordemNarrativa !== null && Number.isFinite(evento.ordemNarrativa)
+          ? evento.ordemNarrativa
+          : null;
+      return {
+        tipo,
+        caminhoRelativo: caminho,
+        chave: evento.chave,
+        id: evento.id,
+        titulo: evento.titulo,
+        filePath: evento.filePath,
+        livro: evento.livro,
+        capitulo: evento.capitulo,
+        cena: evento.cena,
+        ordemNarrativa,
+      };
+    },
+  );
+
+  const problemas: EntradaManifestoProblema[] = dados.problemas.map(
+    (p): EntradaManifestoProblema => ({
+      nivel: p.nivel,
+      mensagem: p.mensagem,
+      relacionados: [...p.relacionados],
+    }),
+  );
+
+  const manifesto: ManifestoScrivener = {
+    tipo: 'contrarius-scrivener-export',
+    versao: 1,
+    titulo: dados.titulo,
+    filtroLivro: dados.filtroLivro,
+    busca: dados.busca,
+    geradoEm: dados.geradoEm,
+    totais: {
+      eventosPosicionados: dados.eventosPosicionados.length,
+      eventosSemOrdem: dados.eventosSemOrdem.length,
+      problemas: dados.problemas.length,
+    },
+    arquivos,
+    problemas,
+  };
+
+  return JSON.stringify(manifesto, null, 2) + '\n';
+}
+
+// ─── README de importação ─────────────────────────────────────────────────────
+
+function gerarReadmeImportacao(dados: DadosPacoteScrivener): string {
+  const lines: string[] = [
+    '# Instruções de importação — Scrivener',
+    '',
+    'Os arquivos nesta pasta são cópias de trabalho geradas para uso no Scrivener.',
+    'As notas originais do Vault **não foram alteradas**.',
+    '',
+    'O arquivo `contrarius-manifest.json` identifica a origem de cada arquivo exportado,',
+    'incluindo chave interna, caminho original e posição narrativa.',
+    '',
+    'Recomenda-se não renomear os arquivos se houver intenção de retorno futuro ao Vault.',
+    '',
+    'O marcador `[preencher no Scrivener]` indica espaços reservados para escrita.',
+    '',
+    '## Contagens',
+    '',
+    `- Eventos posicionados: ${dados.eventosPosicionados.length}`,
+    `- Eventos sem ordem: ${dados.eventosSemOrdem.length}`,
+    '',
+  ];
+  return lines.join('\n');
+}
+
 function gerarIndice(
   dados: DadosPacoteScrivener,
   metaArquivos: readonly MetaArquivoEvento[],
@@ -212,6 +329,11 @@ function gerarIndice(
     `- Gerado em: ${dados.geradoEm}`,
     `- Eventos posicionados: ${dados.eventosPosicionados.length}`,
     `- Eventos sem ordem: ${dados.eventosSemOrdem.length}`,
+    '',
+    '## Arquivos de controle',
+    '',
+    '- [Manifesto Contrarius](contrarius-manifest.json)',
+    '- [Instruções de importação](README_IMPORTACAO_SCRIVENER.md)',
     '',
     '## Índice — Eventos posicionados',
     '',
@@ -278,10 +400,14 @@ export function gerarPacoteScrivenerMarkdown(
   }
 
   const indiceConteudo = gerarIndice(dados, metaArquivos);
+  const manifestoConteudo = gerarManifesto(dados, metaArquivos);
+  const readmeConteudo = gerarReadmeImportacao(dados);
 
   return {
     arquivos: [
       { caminhoRelativo: '00_ROTEIRO.md', conteudo: indiceConteudo },
+      { caminhoRelativo: 'contrarius-manifest.json', conteudo: manifestoConteudo },
+      { caminhoRelativo: 'README_IMPORTACAO_SCRIVENER.md', conteudo: readmeConteudo },
       ...arquivosEventos,
     ],
   };
