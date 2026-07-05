@@ -5,6 +5,7 @@ import {
   parseYaml,
   setIcon,
   TFile,
+  TFolder,
   WorkspaceLeaf,
 } from 'obsidian';
 import { indexarContrarius } from './indexer';
@@ -118,6 +119,11 @@ import {
   validarPacoteScrivenerMarkdown,
   resumirValidacaoPacoteScrivener,
 } from './scrivener-export-validation-model';
+import {
+  compararPacoteScrivenerRetornado,
+  type ArquivoPacoteScrivenerRetornado,
+  type DadosComparacaoPacoteScrivener,
+} from './scrivener-return-compare-model';
 
 export const VIEW_TYPE_CONTRARIUS_DASHBOARD = 'contrarius-knowledge-dashboard';
 
@@ -1331,6 +1337,13 @@ export class ContrariusDashboardView extends ItemView {
     });
     btnScrivener.disabled = this.narrativaEditando || this.narrativaRevisando || this.narrativaOcupado;
     btnScrivener.onclick = () => { void this.exportarPacoteScrivener(); };
+
+    const btnComparar = bar.createEl('button', {
+      text: 'Comparar pacote Scrivener',
+      attr: { 'aria-label': 'Comparar pacote Scrivener retornado com manifesto de exportação' },
+    });
+    btnComparar.disabled = this.narrativaEditando || this.narrativaRevisando || this.narrativaOcupado;
+    btnComparar.onclick = () => { void this.compararPacoteScrivener(); };
   }
 
   private renderSeletorVisualizacaoNarrativa(container: HTMLElement): void {
@@ -2402,6 +2415,89 @@ export class ContrariusDashboardView extends ItemView {
       atual = atual === '' ? parte : `${atual}/${parte}`;
       if (this.obsidianApp.vault.getAbstractFileByPath(atual) === null) {
         await this.obsidianApp.vault.createFolder(atual);
+      }
+    }
+  }
+
+  private async compararPacoteScrivener(): Promise<void> {
+    try {
+      const pastaBase = '12_Export/Scrivener';
+      const pastaBaseAbs = this.obsidianApp.vault.getAbstractFileByPath(pastaBase);
+
+      if (!(pastaBaseAbs instanceof TFolder)) {
+        new Notice('Nenhum pacote Scrivener encontrado para comparar.');
+        return;
+      }
+
+      let pastaEscolhida: TFolder | null = null;
+      let maiorMtime = -Infinity;
+
+      for (const filho of pastaBaseAbs.children) {
+        if (!(filho instanceof TFolder)) continue;
+        const manifestoPath = `${filho.path}/contrarius-manifest.json`;
+        const manifestoFile = this.obsidianApp.vault.getAbstractFileByPath(manifestoPath);
+        if (!(manifestoFile instanceof TFile)) continue;
+        if (manifestoFile.stat.mtime > maiorMtime) {
+          maiorMtime = manifestoFile.stat.mtime;
+          pastaEscolhida = filho;
+        }
+      }
+
+      if (pastaEscolhida === null) {
+        new Notice('Nenhum pacote Scrivener encontrado para comparar.');
+        return;
+      }
+
+      const arquivos: ArquivoPacoteScrivenerRetornado[] = [];
+      await this.lerArquivosPacoteScrivener(pastaEscolhida, pastaEscolhida.path, arquivos);
+
+      const manifestoFile = this.obsidianApp.vault.getAbstractFileByPath(
+        `${pastaEscolhida.path}/contrarius-manifest.json`,
+      );
+      let manifestoJson = '';
+      if (manifestoFile instanceof TFile) {
+        manifestoJson = await this.obsidianApp.vault.read(manifestoFile);
+      }
+
+      const agora = new Date();
+      const pad2 = (n: number): string => String(n).padStart(2, '0');
+      const geradoEm = `${agora.getFullYear()}-${pad2(agora.getMonth() + 1)}-${pad2(agora.getDate())} ${pad2(agora.getHours())}:${pad2(agora.getMinutes())}`;
+
+      const dadosComparacao: DadosComparacaoPacoteScrivener = {
+        manifestoJson,
+        arquivos,
+        geradoEm,
+      };
+
+      const resultado = compararPacoteScrivenerRetornado(dadosComparacao);
+
+      const nomeBase = 'RELATORIO_COMPARACAO';
+      let caminhoRelatorio = `${pastaEscolhida.path}/${nomeBase}.md`;
+      let sufixo = 2;
+      while (this.obsidianApp.vault.getAbstractFileByPath(caminhoRelatorio) !== null) {
+        caminhoRelatorio = `${pastaEscolhida.path}/${nomeBase}-${sufixo}.md`;
+        sufixo++;
+      }
+
+      await this.obsidianApp.vault.create(caminhoRelatorio, resultado.relatorioMarkdown);
+      new Notice(`Relatório de comparação Scrivener gerado: ${caminhoRelatorio}`);
+    } catch (e) {
+      new Notice('Não foi possível comparar o pacote Scrivener.');
+    }
+  }
+
+  private async lerArquivosPacoteScrivener(
+    pasta: TFolder,
+    pastaRaiz: string,
+    arquivos: ArquivoPacoteScrivenerRetornado[],
+  ): Promise<void> {
+    for (const filho of pasta.children) {
+      if (filho instanceof TFile && (filho.extension === 'md' || filho.extension === 'json')) {
+        const caminhoRelativo = filho.path.slice(pastaRaiz.length + 1);
+        const conteudo = await this.obsidianApp.vault.read(filho);
+        arquivos.push({ caminhoRelativo, conteudo });
+      } else if (filho instanceof TFolder) {
+        await this.lerArquivosPacoteScrivener(filho, pastaRaiz, arquivos);
       }
     }
   }
