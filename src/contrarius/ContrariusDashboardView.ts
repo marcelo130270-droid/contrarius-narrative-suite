@@ -156,6 +156,12 @@ import {
   type DadosPreviaRestauracaoScrivener,
   type NotaAtualPreviaRestauracaoScrivener,
 } from './scrivener-restore-preview-model';
+import {
+  gerarRestauracaoControladaScrivener,
+  type BackupRestauracaoControlada,
+  type DadosRestauracaoControladaScrivener,
+  type NotaAtualRestauracaoControlada,
+} from './scrivener-controlled-restore-model';
 
 export const VIEW_TYPE_CONTRARIUS_DASHBOARD = 'contrarius-knowledge-dashboard';
 
@@ -1411,6 +1417,13 @@ export class ContrariusDashboardView extends ItemView {
     });
     btnPreviaRestauracao.disabled = this.narrativaEditando || this.narrativaRevisando || this.narrativaOcupado;
     btnPreviaRestauracao.onclick = () => { void this.realizarPreviaRestauracaoScrivener(); };
+
+    const btnRestaurar = bar.createEl('button', {
+      text: 'Restaurar aplicação Scrivener',
+      attr: { 'aria-label': 'Restaurar notas originais a partir dos backups Scrivener' },
+    });
+    btnRestaurar.disabled = this.narrativaEditando || this.narrativaRevisando || this.narrativaOcupado;
+    btnRestaurar.onclick = () => { void this.realizarRestauracaoControladaScrivener(); };
   }
 
   private renderSeletorVisualizacaoNarrativa(container: HTMLElement): void {
@@ -3267,6 +3280,214 @@ export class ContrariusDashboardView extends ItemView {
       new Notice(`Prévia de restauração Scrivener gerada: ${caminhoRelatorio}`);
     } catch {
       new Notice('Não foi possível gerar a prévia de restauração Scrivener.');
+    } finally {
+      this.narrativaOcupado = false;
+      this.render();
+    }
+  }
+
+  private async realizarRestauracaoControladaScrivener(): Promise<void> {
+    if (this.narrativaOcupado) return;
+    this.narrativaOcupado = true;
+    this.render();
+
+    let pastaEscolhida: TFolder | null = null;
+    try {
+      const pastaBase = '12_Export/Scrivener';
+      const pastaBaseAbs = this.obsidianApp.vault.getAbstractFileByPath(pastaBase);
+
+      if (!(pastaBaseAbs instanceof TFolder)) {
+        new Notice('Nenhum pacote Scrivener encontrado para restaurar.');
+        return;
+      }
+
+      let maiorMtime = -Infinity;
+      for (const filho of pastaBaseAbs.children) {
+        if (!(filho instanceof TFolder)) continue;
+        const manifestoFile = this.obsidianApp.vault.getAbstractFileByPath(
+          `${filho.path}/contrarius-manifest.json`,
+        );
+        if (!(manifestoFile instanceof TFile)) continue;
+        if (manifestoFile.stat.mtime > maiorMtime) {
+          maiorMtime = manifestoFile.stat.mtime;
+          pastaEscolhida = filho;
+        }
+      }
+
+      if (pastaEscolhida === null) {
+        new Notice('Nenhum pacote Scrivener encontrado para restaurar.');
+        return;
+      }
+
+      const manifestoFile = this.obsidianApp.vault.getAbstractFileByPath(
+        `${pastaEscolhida.path}/contrarius-manifest.json`,
+      );
+      let manifestoJson = '';
+      if (manifestoFile instanceof TFile) {
+        manifestoJson = await this.obsidianApp.vault.read(manifestoFile);
+      }
+
+      const manifestoFilePaths: string[] = [];
+      let manifestoRawRestore: unknown;
+      try {
+        manifestoRawRestore = JSON.parse(manifestoJson);
+      } catch {
+        manifestoRawRestore = null;
+      }
+      if (
+        typeof manifestoRawRestore === 'object' &&
+        manifestoRawRestore !== null &&
+        !Array.isArray(manifestoRawRestore)
+      ) {
+        const arquivosM = (manifestoRawRestore as Record<string, unknown>)['arquivos'];
+        if (Array.isArray(arquivosM)) {
+          for (const entrada of arquivosM) {
+            if (typeof entrada !== 'object' || entrada === null || Array.isArray(entrada)) continue;
+            const fp = (entrada as Record<string, unknown>)['filePath'];
+            if (typeof fp !== 'string' || fp.trim() === '') continue;
+            manifestoFilePaths.push(fp.trim());
+          }
+        }
+      }
+
+      const backups: BackupRestauracaoControlada[] = [];
+      const pastaBackupPath = `${pastaEscolhida.path}/BACKUP_ANTES_APLICACAO`;
+      const pastaBackupAbs = this.obsidianApp.vault.getAbstractFileByPath(pastaBackupPath);
+      if (pastaBackupAbs instanceof TFolder) {
+        for (const filho of pastaBackupAbs.children) {
+          if (!(filho instanceof TFile) || filho.extension !== 'md') continue;
+          const nome = filho.name;
+          const caminhoBackup = `BACKUP_ANTES_APLICACAO/${nome}`;
+          const conteudoBackup = await this.obsidianApp.vault.read(filho);
+          const matched = manifestoFilePaths.find((fp) => fp.replace(/[/\\]/g, '_') === nome);
+          backups.push({
+            filePathOriginal: matched ?? '',
+            caminhoBackup,
+            conteudoBackup,
+          });
+        }
+      }
+
+      const notasAtuais: NotaAtualRestauracaoControlada[] = [];
+      const notasLidas = new Set<string>();
+      for (const fp of manifestoFilePaths) {
+        if (notasLidas.has(fp)) continue;
+        const notaFile = this.obsidianApp.vault.getAbstractFileByPath(fp);
+        if (notaFile instanceof TFile) {
+          notasAtuais.push({
+            filePath: fp,
+            conteudoAtual: await this.obsidianApp.vault.read(notaFile),
+          });
+          notasLidas.add(fp);
+        }
+      }
+
+      const agora = new Date();
+      const pad2 = (n: number): string => String(n).padStart(2, '0');
+      const geradoEm = `${agora.getFullYear()}-${pad2(agora.getMonth() + 1)}-${pad2(agora.getDate())} ${pad2(agora.getHours())}:${pad2(agora.getMinutes())}`;
+
+      const dados: DadosRestauracaoControladaScrivener = {
+        manifestoJson,
+        backups,
+        notasAtuais,
+        geradoEm,
+      };
+
+      const resultado = gerarRestauracaoControladaScrivener(dados);
+
+      const nomeBase = 'RESTAURACAO_SCRIVENER';
+
+      if (!resultado.podeRestaurar) {
+        let caminhoRelatorio = `${pastaEscolhida.path}/${nomeBase}_BLOQUEADA.md`;
+        let sufixo = 2;
+        while (this.obsidianApp.vault.getAbstractFileByPath(caminhoRelatorio) !== null) {
+          caminhoRelatorio = `${pastaEscolhida.path}/${nomeBase}_BLOQUEADA-${sufixo}.md`;
+          sufixo++;
+        }
+        await this.criarOuModificarArquivo(caminhoRelatorio, resultado.relatorioMarkdown);
+        new Notice(`Restauração Scrivener bloqueada. Relatório gerado.`);
+        return;
+      }
+
+      if (resultado.escritas.length === 0) {
+        let caminhoRelatorio = `${pastaEscolhida.path}/${nomeBase}.md`;
+        let sufixo = 2;
+        while (this.obsidianApp.vault.getAbstractFileByPath(caminhoRelatorio) !== null) {
+          caminhoRelatorio = `${pastaEscolhida.path}/${nomeBase}-${sufixo}.md`;
+          sufixo++;
+        }
+        await this.criarOuModificarArquivo(caminhoRelatorio, resultado.relatorioMarkdown);
+        new Notice('Nenhuma nota para restaurar. Relatório gerado.');
+        return;
+      }
+
+      const pastaBackupRestauracao = `${pastaEscolhida.path}/BACKUP_ANTES_RESTAURACAO`;
+      await this.garantirPastaScrivener(pastaBackupRestauracao);
+      for (const escrita of resultado.escritas) {
+        const notaAtual = notasAtuais.find((n) => n.filePath === escrita.filePathOriginal);
+        if (notaAtual !== undefined) {
+          const nomeBackup = escrita.filePathOriginal.replace(/[/\\]/g, '_');
+          await this.criarOuModificarArquivo(
+            `${pastaBackupRestauracao}/${nomeBackup}`,
+            notaAtual.conteudoAtual,
+          );
+        }
+      }
+
+      const restaurados: string[] = [];
+      let falhou = false;
+      for (const escrita of resultado.escritas) {
+        try {
+          const f = this.obsidianApp.vault.getAbstractFileByPath(escrita.filePathOriginal);
+          if (!(f instanceof TFile)) {
+            throw new Error(`Nota não encontrada: ${escrita.filePathOriginal}`);
+          }
+          await this.obsidianApp.vault.modify(f, escrita.conteudoBackup);
+          restaurados.push(escrita.filePathOriginal);
+        } catch {
+          falhou = true;
+        }
+      }
+
+      if (!falhou) {
+        try {
+          let caminhoRelatorio = `${pastaEscolhida.path}/${nomeBase}.md`;
+          let sufixo = 2;
+          while (this.obsidianApp.vault.getAbstractFileByPath(caminhoRelatorio) !== null) {
+            caminhoRelatorio = `${pastaEscolhida.path}/${nomeBase}-${sufixo}.md`;
+            sufixo++;
+          }
+          await this.criarOuModificarArquivo(caminhoRelatorio, resultado.relatorioMarkdown);
+        } catch { /* relatório não crítico */ }
+        new Notice(`${restaurados.length} nota(s) restaurada(s) a partir do backup Scrivener.`);
+      } else {
+        for (const fp of restaurados) {
+          try {
+            const notaOriginal = notasAtuais.find((n) => n.filePath === fp);
+            if (notaOriginal !== undefined) {
+              const f = this.obsidianApp.vault.getAbstractFileByPath(fp);
+              if (f instanceof TFile) await this.obsidianApp.vault.modify(f, notaOriginal.conteudoAtual);
+            }
+          } catch { /* ignora erros de rollback */ }
+        }
+        try {
+          await this.criarOuModificarArquivo(
+            `${pastaEscolhida.path}/${nomeBase}_ERRO.md`,
+            resultado.relatorioMarkdown,
+          );
+        } catch { /* ignora */ }
+        new Notice('Erro durante a restauração Scrivener. Rollback realizado.');
+      }
+    } catch {
+      if (pastaEscolhida !== null) {
+        try {
+          await this.criarOuModificarArquivo(
+            `${pastaEscolhida.path}/RESTAURACAO_SCRIVENER_ERRO.md`,
+            `# Restauração controlada Scrivener\n\nErro inesperado durante a restauração. Nenhuma nota foi alterada.\n`,
+          );
+        } catch { /* ignora */ }
+      }
+      new Notice('Não foi possível realizar a restauração Scrivener.');
     } finally {
       this.narrativaOcupado = false;
       this.render();
