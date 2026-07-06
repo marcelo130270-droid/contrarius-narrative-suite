@@ -150,6 +150,12 @@ import {
   type DadosAuditoriaAplicacaoScrivener,
   type NotaOriginalAuditoriaAplicacao,
 } from './scrivener-apply-audit-model';
+import {
+  gerarPreviaRestauracaoScrivener,
+  type BackupPreviaRestauracaoScrivener,
+  type DadosPreviaRestauracaoScrivener,
+  type NotaAtualPreviaRestauracaoScrivener,
+} from './scrivener-restore-preview-model';
 
 export const VIEW_TYPE_CONTRARIUS_DASHBOARD = 'contrarius-knowledge-dashboard';
 
@@ -1398,6 +1404,13 @@ export class ContrariusDashboardView extends ItemView {
     });
     btnAuditoria.disabled = this.narrativaEditando || this.narrativaRevisando || this.narrativaOcupado;
     btnAuditoria.onclick = () => { void this.realizarAuditoriaAplicacaoScrivener(); };
+
+    const btnPreviaRestauracao = bar.createEl('button', {
+      text: 'Gerar prévia de restauração Scrivener',
+      attr: { 'aria-label': 'Gerar prévia de restauração Scrivener por backup' },
+    });
+    btnPreviaRestauracao.disabled = this.narrativaEditando || this.narrativaRevisando || this.narrativaOcupado;
+    btnPreviaRestauracao.onclick = () => { void this.realizarPreviaRestauracaoScrivener(); };
   }
 
   private renderSeletorVisualizacaoNarrativa(container: HTMLElement): void {
@@ -3127,6 +3140,133 @@ export class ContrariusDashboardView extends ItemView {
       new Notice(`Auditoria Scrivener gerada: ${caminhoRelatorio}`);
     } catch {
       new Notice('Não foi possível auditar a aplicação Scrivener.');
+    } finally {
+      this.narrativaOcupado = false;
+      this.render();
+    }
+  }
+
+  private async realizarPreviaRestauracaoScrivener(): Promise<void> {
+    if (this.narrativaOcupado) return;
+    this.narrativaOcupado = true;
+    this.render();
+
+    try {
+      const pastaBase = '12_Export/Scrivener';
+      const pastaBaseAbs = this.obsidianApp.vault.getAbstractFileByPath(pastaBase);
+
+      if (!(pastaBaseAbs instanceof TFolder)) {
+        new Notice('Nenhum pacote Scrivener encontrado para gerar prévia de restauração.');
+        return;
+      }
+
+      let maiorMtime = -Infinity;
+      let pastaEscolhida: TFolder | null = null;
+      for (const filho of pastaBaseAbs.children) {
+        if (!(filho instanceof TFolder)) continue;
+        const manifestoFile = this.obsidianApp.vault.getAbstractFileByPath(
+          `${filho.path}/contrarius-manifest.json`,
+        );
+        if (!(manifestoFile instanceof TFile)) continue;
+        if (manifestoFile.stat.mtime > maiorMtime) {
+          maiorMtime = manifestoFile.stat.mtime;
+          pastaEscolhida = filho;
+        }
+      }
+
+      if (pastaEscolhida === null) {
+        new Notice('Nenhum pacote Scrivener encontrado para gerar prévia de restauração.');
+        return;
+      }
+
+      const manifestoFile = this.obsidianApp.vault.getAbstractFileByPath(
+        `${pastaEscolhida.path}/contrarius-manifest.json`,
+      );
+      let manifestoJson = '';
+      if (manifestoFile instanceof TFile) {
+        manifestoJson = await this.obsidianApp.vault.read(manifestoFile);
+      }
+
+      const manifestoFilePaths: string[] = [];
+      let manifestoRawRestore: unknown;
+      try {
+        manifestoRawRestore = JSON.parse(manifestoJson);
+      } catch {
+        manifestoRawRestore = null;
+      }
+      if (
+        typeof manifestoRawRestore === 'object' &&
+        manifestoRawRestore !== null &&
+        !Array.isArray(manifestoRawRestore)
+      ) {
+        const arquivosM = (manifestoRawRestore as Record<string, unknown>)['arquivos'];
+        if (Array.isArray(arquivosM)) {
+          for (const entrada of arquivosM) {
+            if (typeof entrada !== 'object' || entrada === null || Array.isArray(entrada)) continue;
+            const fp = (entrada as Record<string, unknown>)['filePath'];
+            if (typeof fp !== 'string' || fp.trim() === '') continue;
+            manifestoFilePaths.push(fp.trim());
+          }
+        }
+      }
+
+      const backups: BackupPreviaRestauracaoScrivener[] = [];
+      const pastaBackupPath = `${pastaEscolhida.path}/BACKUP_ANTES_APLICACAO`;
+      const pastaBackupAbs = this.obsidianApp.vault.getAbstractFileByPath(pastaBackupPath);
+      if (pastaBackupAbs instanceof TFolder) {
+        for (const filho of pastaBackupAbs.children) {
+          if (!(filho instanceof TFile) || filho.extension !== 'md') continue;
+          const nome = filho.name;
+          const caminhoBackup = `BACKUP_ANTES_APLICACAO/${nome}`;
+          const conteudoBackup = await this.obsidianApp.vault.read(filho);
+          const matched = manifestoFilePaths.find((fp) => fp.replace(/[/\\]/g, '_') === nome);
+          backups.push({
+            filePathOriginal: matched ?? '',
+            caminhoBackup,
+            conteudoBackup,
+          });
+        }
+      }
+
+      const notasAtuais: NotaAtualPreviaRestauracaoScrivener[] = [];
+      const notasLidas = new Set<string>();
+      for (const fp of manifestoFilePaths) {
+        if (notasLidas.has(fp)) continue;
+        const notaFile = this.obsidianApp.vault.getAbstractFileByPath(fp);
+        if (notaFile instanceof TFile) {
+          notasAtuais.push({
+            filePath: fp,
+            conteudoAtual: await this.obsidianApp.vault.read(notaFile),
+          });
+          notasLidas.add(fp);
+        }
+      }
+
+      const agora = new Date();
+      const pad2 = (n: number): string => String(n).padStart(2, '0');
+      const geradoEm = `${agora.getFullYear()}-${pad2(agora.getMonth() + 1)}-${pad2(agora.getDate())} ${pad2(agora.getHours())}:${pad2(agora.getMinutes())}`;
+
+      const dados: DadosPreviaRestauracaoScrivener = {
+        manifestoJson,
+        backups,
+        notasAtuais,
+        geradoEm,
+      };
+
+      const resultado = gerarPreviaRestauracaoScrivener(dados);
+
+      const nomeBase = 'RELATORIO_PREVIA_RESTAURACAO_SCRIVENER';
+      let caminhoRelatorio = `${pastaEscolhida.path}/${nomeBase}.md`;
+      let sufixo = 2;
+      while (this.obsidianApp.vault.getAbstractFileByPath(caminhoRelatorio) !== null) {
+        caminhoRelatorio = `${pastaEscolhida.path}/${nomeBase}-${sufixo}.md`;
+        sufixo++;
+      }
+
+      await this.obsidianApp.vault.create(caminhoRelatorio, resultado.relatorioMarkdown);
+      new Notice(`Prévia de restauração Scrivener gerada: ${caminhoRelatorio}`);
+    } catch {
+      new Notice('Não foi possível gerar a prévia de restauração Scrivener.');
     } finally {
       this.narrativaOcupado = false;
       this.render();
