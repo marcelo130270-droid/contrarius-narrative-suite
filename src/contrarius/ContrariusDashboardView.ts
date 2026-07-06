@@ -136,6 +136,13 @@ import {
   type DadosPreviaAplicacaoScrivener,
   type NotaOriginalPreviaAplicacao,
 } from './scrivener-apply-preview-model';
+import {
+  gerarAplicacaoControladaScrivener,
+  type AlteracaoAplicacaoControladaScrivener,
+  type ArquivoScrivenerAplicacaoControlada,
+  type DadosAplicacaoControladaScrivener,
+  type NotaOriginalAplicacaoControlada,
+} from './scrivener-controlled-apply-model';
 
 export const VIEW_TYPE_CONTRARIUS_DASHBOARD = 'contrarius-knowledge-dashboard';
 
@@ -1370,6 +1377,13 @@ export class ContrariusDashboardView extends ItemView {
     });
     btnPrevia.disabled = this.narrativaEditando || this.narrativaRevisando || this.narrativaOcupado;
     btnPrevia.onclick = () => { void this.gerarPreviaRetornoScrivener(); };
+
+    const btnAplicar = bar.createEl('button', {
+      text: 'Aplicar sinopses do Scrivener',
+      attr: { 'aria-label': 'Aplicar sinopses do Scrivener nas notas originais' },
+    });
+    btnAplicar.disabled = this.narrativaEditando || this.narrativaRevisando || this.narrativaOcupado;
+    btnAplicar.onclick = () => { void this.aplicarSinopsesScrivener(); };
   }
 
   private renderSeletorVisualizacaoNarrativa(container: HTMLElement): void {
@@ -2753,6 +2767,200 @@ export class ContrariusDashboardView extends ItemView {
       } else if (filho instanceof TFolder) {
         await this.lerArquivosMarkdownPacotePrevia(filho, pastaRaiz, arquivos);
       }
+    }
+  }
+
+  private async criarOuModificarArquivo(caminho: string, conteudo: string): Promise<void> {
+    const existing = this.obsidianApp.vault.getAbstractFileByPath(caminho);
+    if (existing instanceof TFile) {
+      await this.obsidianApp.vault.modify(existing, conteudo);
+    } else {
+      await this.obsidianApp.vault.create(caminho, conteudo);
+    }
+  }
+
+  private async lerArquivosMarkdownPacoteAplicacao(
+    pasta: TFolder,
+    pastaRaiz: string,
+    arquivos: ArquivoScrivenerAplicacaoControlada[],
+  ): Promise<void> {
+    for (const filho of pasta.children) {
+      if (filho instanceof TFile && filho.extension === 'md') {
+        const caminhoRelativo = filho.path.slice(pastaRaiz.length + 1);
+        const conteudo = await this.obsidianApp.vault.read(filho);
+        arquivos.push({ caminhoRelativo, conteudo });
+      } else if (filho instanceof TFolder) {
+        await this.lerArquivosMarkdownPacoteAplicacao(filho, pastaRaiz, arquivos);
+      }
+    }
+  }
+
+  private async aplicarSinopsesScrivener(): Promise<void> {
+    if (this.narrativaOcupado) return;
+    this.narrativaOcupado = true;
+    this.render();
+
+    try {
+      const pastaBase = '12_Export/Scrivener';
+      const pastaBaseAbs = this.obsidianApp.vault.getAbstractFileByPath(pastaBase);
+
+      if (!(pastaBaseAbs instanceof TFolder)) {
+        new Notice('Nenhum pacote Scrivener encontrado para aplicar.');
+        return;
+      }
+
+      let maiorMtime = -Infinity;
+      let pastaEscolhida: TFolder | null = null;
+      for (const filho of pastaBaseAbs.children) {
+        if (!(filho instanceof TFolder)) continue;
+        const manifestoFile = this.obsidianApp.vault.getAbstractFileByPath(
+          `${filho.path}/contrarius-manifest.json`,
+        );
+        if (!(manifestoFile instanceof TFile)) continue;
+        if (manifestoFile.stat.mtime > maiorMtime) {
+          maiorMtime = manifestoFile.stat.mtime;
+          pastaEscolhida = filho;
+        }
+      }
+
+      if (pastaEscolhida === null) {
+        new Notice('Nenhum pacote Scrivener encontrado para aplicar.');
+        return;
+      }
+
+      const manifestoFile = this.obsidianApp.vault.getAbstractFileByPath(
+        `${pastaEscolhida.path}/contrarius-manifest.json`,
+      );
+      let manifestoJson = '';
+      if (manifestoFile instanceof TFile) {
+        manifestoJson = await this.obsidianApp.vault.read(manifestoFile);
+      }
+
+      const arquivosScrivener: ArquivoScrivenerAplicacaoControlada[] = [];
+      await this.lerArquivosMarkdownPacoteAplicacao(
+        pastaEscolhida,
+        pastaEscolhida.path,
+        arquivosScrivener,
+      );
+
+      const notasOriginais: NotaOriginalAplicacaoControlada[] = [];
+      let manifestoRawApl: unknown;
+      try {
+        manifestoRawApl = JSON.parse(manifestoJson);
+      } catch {
+        manifestoRawApl = null;
+      }
+      if (
+        typeof manifestoRawApl === 'object' &&
+        manifestoRawApl !== null &&
+        !Array.isArray(manifestoRawApl)
+      ) {
+        const arquivosM = (manifestoRawApl as Record<string, unknown>)['arquivos'];
+        if (Array.isArray(arquivosM)) {
+          const notasLidas = new Set<string>();
+          for (const entrada of arquivosM) {
+            if (typeof entrada !== 'object' || entrada === null || Array.isArray(entrada)) continue;
+            const fp = (entrada as Record<string, unknown>)['filePath'];
+            if (typeof fp !== 'string' || fp.trim() === '') continue;
+            if (notasLidas.has(fp)) continue;
+            const notaFile = this.obsidianApp.vault.getAbstractFileByPath(fp);
+            if (notaFile instanceof TFile) {
+              notasOriginais.push({
+                filePath: fp,
+                conteudo: await this.obsidianApp.vault.read(notaFile),
+              });
+              notasLidas.add(fp);
+            }
+          }
+        }
+      }
+
+      const agora = new Date();
+      const pad2 = (n: number): string => String(n).padStart(2, '0');
+      const geradoEm = `${agora.getFullYear()}-${pad2(agora.getMonth() + 1)}-${pad2(agora.getDate())} ${pad2(agora.getHours())}:${pad2(agora.getMinutes())}`;
+
+      const dadosAplicacao: DadosAplicacaoControladaScrivener = {
+        manifestoJson,
+        arquivosScrivener,
+        notasOriginais,
+        geradoEm,
+      };
+
+      const resultado = gerarAplicacaoControladaScrivener(dadosAplicacao);
+
+      if (!resultado.podeAplicar) {
+        await this.criarOuModificarArquivo(
+          `${pastaEscolhida.path}/APLICACAO_SCRIVENER_BLOQUEADA.md`,
+          resultado.relatorioMarkdown,
+        );
+        new Notice('Aplicação Scrivener bloqueada. Relatório gerado.');
+        return;
+      }
+
+      if (resultado.alteracoes.length === 0) {
+        await this.criarOuModificarArquivo(
+          `${pastaEscolhida.path}/APLICACAO_SCRIVENER.md`,
+          resultado.relatorioMarkdown,
+        );
+        new Notice('Nenhuma sinopse Scrivener para aplicar. Relatório gerado.');
+        return;
+      }
+
+      const pastaBackup = `${pastaEscolhida.path}/BACKUP_ANTES_APLICACAO`;
+      await this.garantirPastaScrivener(pastaBackup);
+      for (const alt of resultado.alteracoes) {
+        const nomeBackup = alt.filePathOriginal.replace(/[/\\]/g, '_');
+        await this.criarOuModificarArquivo(
+          `${pastaBackup}/${nomeBackup}`,
+          alt.conteudoOriginal,
+        );
+      }
+
+      const aplicados: AlteracaoAplicacaoControladaScrivener[] = [];
+      let falhou = false;
+
+      for (const alt of resultado.alteracoes) {
+        if (falhou) break;
+        try {
+          const f = this.obsidianApp.vault.getAbstractFileByPath(alt.filePathOriginal);
+          if (!(f instanceof TFile)) {
+            throw new Error(`Nota não encontrada: ${alt.filePathOriginal}`);
+          }
+          await this.obsidianApp.vault.modify(f, alt.conteudoAtualizado);
+          aplicados.push(alt);
+        } catch {
+          falhou = true;
+        }
+      }
+
+      if (!falhou) {
+        try {
+          await this.criarOuModificarArquivo(
+            `${pastaEscolhida.path}/APLICACAO_SCRIVENER.md`,
+            resultado.relatorioMarkdown,
+          );
+        } catch { /* relatório não crítico */ }
+        new Notice(`Sinopses Scrivener aplicadas: ${aplicados.length}.`);
+      } else {
+        for (const alt of aplicados) {
+          try {
+            const f = this.obsidianApp.vault.getAbstractFileByPath(alt.filePathOriginal);
+            if (f instanceof TFile) await this.obsidianApp.vault.modify(f, alt.conteudoOriginal);
+          } catch { /* ignora erros de rollback */ }
+        }
+        try {
+          await this.criarOuModificarArquivo(
+            `${pastaEscolhida.path}/APLICACAO_SCRIVENER_ERRO.md`,
+            resultado.relatorioMarkdown,
+          );
+        } catch { /* ignora */ }
+        new Notice('Erro ao aplicar sinopses Scrivener. Alterações revertidas quando possível.');
+      }
+    } catch (e) {
+      new Notice('Erro ao aplicar sinopses Scrivener. Alterações revertidas quando possível.');
+    } finally {
+      this.narrativaOcupado = false;
+      this.render();
     }
   }
 
