@@ -169,6 +169,12 @@ import {
   type DadosAuditoriaRestauracaoScrivener,
   type NotaAtualAuditoriaRestauracao,
 } from './scrivener-restore-audit-model';
+import {
+  gerarIndiceHistoricoScrivener,
+  type ArquivoPacoteHistoricoScrivener,
+  type DadosIndiceHistoricoScrivener,
+  type DadosPacoteHistoricoScrivener,
+} from './scrivener-history-index-model';
 
 export const VIEW_TYPE_CONTRARIUS_DASHBOARD = 'contrarius-knowledge-dashboard';
 
@@ -1438,6 +1444,13 @@ export class ContrariusDashboardView extends ItemView {
     });
     btnAuditoriaRestauracao.disabled = this.narrativaEditando || this.narrativaRevisando || this.narrativaOcupado;
     btnAuditoriaRestauracao.onclick = () => { void this.realizarAuditoriaRestauracaoScrivener(); };
+
+    const btnIndice = bar.createEl('button', {
+      text: 'Gerar índice Scrivener',
+      attr: { 'aria-label': 'Gerar índice histórico de todos os pacotes Scrivener' },
+    });
+    btnIndice.disabled = this.narrativaEditando || this.narrativaRevisando || this.narrativaOcupado;
+    btnIndice.onclick = () => { void this.gerarIndiceHistoricoPacotesScrivener(); };
   }
 
   private renderSeletorVisualizacaoNarrativa(container: HTMLElement): void {
@@ -3651,6 +3664,70 @@ export class ContrariusDashboardView extends ItemView {
     } finally {
       this.narrativaOcupado = false;
       this.render();
+    }
+  }
+
+  private async listarArquivosPacoteHistorico(
+    pasta: TFolder,
+    pastaRaiz: string,
+    arquivos: ArquivoPacoteHistoricoScrivener[],
+  ): Promise<void> {
+    for (const filho of pasta.children) {
+      if (filho instanceof TFile && (filho.extension === 'md' || filho.extension === 'json')) {
+        const caminhoRelativo = filho.path.slice(pastaRaiz.length + 1);
+        arquivos.push({ caminhoRelativo });
+      } else if (filho instanceof TFolder) {
+        await this.listarArquivosPacoteHistorico(filho, pastaRaiz, arquivos);
+      }
+    }
+  }
+
+  private async gerarIndiceHistoricoPacotesScrivener(): Promise<void> {
+    try {
+      const pastaBase = '12_Export/Scrivener';
+      const pastaBaseAbs = this.obsidianApp.vault.getAbstractFileByPath(pastaBase);
+
+      const pacotes: DadosPacoteHistoricoScrivener[] = [];
+
+      if (pastaBaseAbs instanceof TFolder) {
+        for (const filho of pastaBaseAbs.children) {
+          if (!(filho instanceof TFolder)) continue;
+          const arquivos: ArquivoPacoteHistoricoScrivener[] = [];
+          await this.listarArquivosPacoteHistorico(filho, filho.path, arquivos);
+          const manifestoFile = this.obsidianApp.vault.getAbstractFileByPath(
+            `${filho.path}/contrarius-manifest.json`,
+          );
+          let manifestoJson = '';
+          if (manifestoFile instanceof TFile) {
+            manifestoJson = await this.obsidianApp.vault.read(manifestoFile);
+          }
+          pacotes.push({ nomePasta: filho.name, arquivos, manifestoJson });
+        }
+      }
+
+      const agora = new Date();
+      const pad2 = (n: number): string => String(n).padStart(2, '0');
+      const geradoEm = `${agora.getFullYear()}-${pad2(agora.getMonth() + 1)}-${pad2(agora.getDate())} ${pad2(agora.getHours())}:${pad2(agora.getMinutes())}`;
+
+      const dados: DadosIndiceHistoricoScrivener = { pacotes, geradoEm };
+      const resultado = gerarIndiceHistoricoScrivener(dados);
+
+      await this.garantirPastaScrivener(pastaBase);
+
+      const nomeBase = 'INDICE_HISTORICO_SCRIVENER';
+      let caminhoRelatorio = `${pastaBase}/${nomeBase}.md`;
+      let sufixo = 2;
+      while (this.obsidianApp.vault.getAbstractFileByPath(caminhoRelatorio) !== null) {
+        caminhoRelatorio = `${pastaBase}/${nomeBase}-${sufixo}.md`;
+        sufixo++;
+      }
+
+      await this.obsidianApp.vault.create(caminhoRelatorio, resultado.relatorioMarkdown);
+      new Notice(
+        `Índice histórico Scrivener gerado: ${caminhoRelatorio} (${resultado.totalPacotes} pacote(s))`,
+      );
+    } catch {
+      new Notice('Não foi possível gerar o índice de pacotes Scrivener.');
     }
   }
 
