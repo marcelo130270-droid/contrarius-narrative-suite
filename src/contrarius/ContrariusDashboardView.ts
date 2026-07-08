@@ -175,6 +175,12 @@ import {
   type DadosIndiceHistoricoScrivener,
   type DadosPacoteHistoricoScrivener,
 } from './scrivener-history-index-model';
+import {
+  gerarPainelStatusScrivener,
+  type DadosStatusPainelScrivener,
+  type PacoteEntradaStatusScrivener,
+  type ResultadoStatusPainelScrivener,
+} from './scrivener-status-panel-model';
 
 export const VIEW_TYPE_CONTRARIUS_DASHBOARD = 'contrarius-knowledge-dashboard';
 
@@ -241,6 +247,7 @@ export class ContrariusDashboardView extends ItemView {
   private narrativaVisualizacao: 'lista' | 'roteiro' = 'lista';
   private narrativaErroPreparacao: DescricaoErroSalvamentoNarrativo | null = null;
   private narrativaErroScaffold: string | null = null;
+  private scrivenerStatusPainel: ResultadoStatusPainelScrivener | null = null;
 
   constructor(leaf: WorkspaceLeaf, app: App) {
     super(leaf);
@@ -342,6 +349,7 @@ export class ContrariusDashboardView extends ItemView {
       this.loading = false;
       this.render();
     }
+    void this.carregarStatusPainelScrivener();
   }
 
   private render(): void {
@@ -1175,6 +1183,7 @@ export class ContrariusDashboardView extends ItemView {
     if (this.cronologiaMode === 'narrativa') {
       this.renderBotaoEditarNarrativa(container);
       this.renderSeletorVisualizacaoNarrativa(container);
+      this.renderPainelStatusScrivener(container);
     }
 
     this.renderCronologiaSummary(container, visao);
@@ -1225,6 +1234,9 @@ export class ContrariusDashboardView extends ItemView {
       });
       btn.onclick = () => {
         this.cronologiaMode = mode;
+        if (mode === 'narrativa' && this.scrivenerStatusPainel === null) {
+          void this.carregarStatusPainelScrivener();
+        }
         this.render();
       };
     }
@@ -3790,6 +3802,149 @@ export class ContrariusDashboardView extends ItemView {
         applyStyles(openBtn, { marginTop: '6px', fontSize: '0.85em' });
         openBtn.onclick = () => { void this.openFile(problema.filePath); };
       }
+    }
+  }
+
+  private async carregarStatusPainelScrivener(): Promise<void> {
+    const pastaBase = '12_Export/Scrivener';
+    const pastaBaseAbs = this.obsidianApp.vault.getAbstractFileByPath(pastaBase);
+
+    if (!(pastaBaseAbs instanceof TFolder)) {
+      this.scrivenerStatusPainel = gerarPainelStatusScrivener({
+        totalPacotesNaPasta: 0,
+        pacoteMaisRecente: null,
+      });
+      this.render();
+      return;
+    }
+
+    const subpastas = pastaBaseAbs.children.filter((f): f is TFolder => f instanceof TFolder);
+    const total = subpastas.length;
+
+    if (total === 0) {
+      this.scrivenerStatusPainel = gerarPainelStatusScrivener({
+        totalPacotesNaPasta: 0,
+        pacoteMaisRecente: null,
+      });
+      this.render();
+      return;
+    }
+
+    const maisRecente = subpastas.reduce((acc, f) =>
+      f.name.localeCompare(acc.name, 'pt-BR') > 0 ? f : acc,
+    );
+
+    const arquivos: ArquivoPacoteHistoricoScrivener[] = [];
+    await this.listarArquivosPacoteHistorico(maisRecente, maisRecente.path, arquivos);
+
+    const manifestoFile = this.obsidianApp.vault.getAbstractFileByPath(
+      `${maisRecente.path}/contrarius-manifest.json`,
+    );
+    let manifestoJson = '';
+    if (manifestoFile instanceof TFile) {
+      manifestoJson = await this.obsidianApp.vault.read(manifestoFile);
+    }
+
+    const pacoteMaisRecente: PacoteEntradaStatusScrivener = {
+      nomePasta: maisRecente.name,
+      arquivos,
+      manifestoJson,
+    };
+
+    const dados: DadosStatusPainelScrivener = { totalPacotesNaPasta: total, pacoteMaisRecente };
+    this.scrivenerStatusPainel = gerarPainelStatusScrivener(dados);
+    this.render();
+  }
+
+  private renderPainelStatusScrivener(container: HTMLElement): void {
+    const painel = container.createDiv();
+    applyStyles(painel, {
+      ...this.cardStyles(),
+      display: 'block',
+      marginBottom: '12px',
+    });
+
+    const cabecalho = painel.createDiv();
+    applyStyles(cabecalho, {
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'baseline',
+      marginBottom: '8px',
+    });
+
+    const titulo = cabecalho.createEl('h4', { text: 'Status Scrivener' });
+    applyStyles(titulo, { margin: '0', fontSize: '0.95em', fontWeight: '600' });
+
+    const status = this.scrivenerStatusPainel;
+
+    if (status !== null) {
+      const totalSpan = cabecalho.createSpan({
+        text: `${status.totalPacotes} pacote(s)`,
+      });
+      applyStyles(totalSpan, { color: 'var(--text-muted)', fontSize: '0.85em' });
+    }
+
+    if (status === null) {
+      const msg = painel.createDiv({ text: 'Carregando…' });
+      applyStyles(msg, { color: 'var(--text-muted)', fontSize: '0.9em' });
+      return;
+    }
+
+    if (status.semPacotes) {
+      const msg = painel.createDiv({
+        text: 'Nenhum pacote Scrivener encontrado em 12_Export/Scrivener/.',
+      });
+      applyStyles(msg, { color: 'var(--text-muted)', fontSize: '0.9em' });
+      return;
+    }
+
+    const p = status.pacoteMaisRecente;
+    if (p === null) return;
+
+    const pastaRow = painel.createDiv();
+    applyStyles(pastaRow, { marginBottom: '6px' });
+    pastaRow.createSpan({ text: 'Pacote mais recente: ' });
+    const pastaSpan = pastaRow.createSpan({ text: p.nomePasta });
+    applyStyles(pastaSpan, { fontWeight: '600' });
+
+    const nivelCores: Record<string, string> = {
+      info: 'var(--text-accent)',
+      ok: 'var(--text-success)',
+      aviso: 'var(--text-warning)',
+      erro: 'var(--text-error)',
+    };
+    const corEtapa = nivelCores[p.nivelEtapa] ?? 'var(--text-muted)';
+
+    const etapaRow = painel.createDiv();
+    applyStyles(etapaRow, { marginBottom: '6px' });
+    etapaRow.createSpan({ text: 'Etapa: ' });
+    const etapaSpan = etapaRow.createSpan({ text: `● ${p.rotuloEtapa}` });
+    applyStyles(etapaSpan, { color: corEtapa, fontWeight: '500' });
+
+    if (p.manifesto.valido) {
+      const m = p.manifesto;
+      const manifestoRow = painel.createDiv();
+      applyStyles(manifestoRow, { marginBottom: '4px', fontSize: '0.9em', color: 'var(--text-muted)' });
+      const partes: string[] = [];
+      if (m.titulo !== '') partes.push(`"${m.titulo}"`);
+      if (m.filtroLivro !== '') partes.push(m.filtroLivro);
+      if (m.geradoEm !== '') partes.push(m.geradoEm);
+      partes.push(`${m.totalArquivos} arquivo(s)`);
+      partes.push(`${m.totalProblemas} problema(s)`);
+      manifestoRow.appendText(`Manifesto: ${partes.join(' · ')}`);
+    }
+
+    const backupPartes: string[] = [];
+    if (p.temBackupAplicacao) {
+      backupPartes.push(`aplicação: ${p.totalBackupsAplicacao} arquivo(s)`);
+    }
+    if (p.temBackupRestauracao) {
+      backupPartes.push(`restauração: ${p.totalBackupsRestauracao} arquivo(s)`);
+    }
+    if (backupPartes.length > 0) {
+      const backupRow = painel.createDiv();
+      applyStyles(backupRow, { fontSize: '0.9em', color: 'var(--text-muted)' });
+      backupRow.appendText(`Backups: ${backupPartes.join(' · ')}`);
     }
   }
 }
