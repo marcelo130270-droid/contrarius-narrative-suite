@@ -1,0 +1,210 @@
+﻿import { describe, expect, it } from 'vitest';
+import {
+  gerarAlertasScrivener,
+  type AlertaScrivener,
+  type EstadoPacoteScrivener,
+  type EstadoPainelScrivener,
+} from '../../src/contrarius/scrivener-alerts-panel-model';
+
+function pacoteLimpo(): EstadoPacoteScrivener {
+  return {
+    manifesto: { valido: true, comProblemas: false },
+    aplicacao: { status: 'ok', auditada: true, precisaBackup: false, temBackup: false },
+    restauracao: { status: 'ok', auditada: true, precisaBackup: false, temBackup: false },
+  };
+}
+
+function codigos(status: EstadoPainelScrivener): string[] {
+  return gerarAlertasScrivener(status).alertas.map((alerta) => alerta.codigo);
+}
+
+describe('gerarAlertasScrivener', () => {
+  it('retorna SEM_PACOTES como info quando nao ha pacotes', () => {
+    const resultado = gerarAlertasScrivener({ pacotes: [] });
+
+    expect(resultado.semAlertas).toBe(false);
+    expect(resultado.alertas).toEqual([{ codigo: 'SEM_PACOTES', nivel: 'info' }]);
+    expect(resultado.contagens).toEqual({ erros: 0, avisos: 0, infos: 1, total: 1 });
+  });
+
+  it('trata status nulo ou indefinido como ausencia de pacotes', () => {
+    expect(gerarAlertasScrivener(null).alertas[0].codigo).toBe('SEM_PACOTES');
+    expect(gerarAlertasScrivener(undefined).alertas[0].codigo).toBe('SEM_PACOTES');
+  });
+
+  it('retorna MANIFESTO_INVALIDO como erro quando manifesto e invalido', () => {
+    const resultado = gerarAlertasScrivener({
+      pacotes: [{ manifesto: { valido: false } }],
+    });
+
+    expect(resultado.alertas).toEqual([{ codigo: 'MANIFESTO_INVALIDO', nivel: 'erro' }]);
+    expect(resultado.contagens).toEqual({ erros: 1, avisos: 0, infos: 0, total: 1 });
+  });
+
+  it('retorna MANIFESTO_COM_PROBLEMAS como aviso', () => {
+    const resultado = gerarAlertasScrivener({
+      pacotes: [{ manifesto: { valido: true, comProblemas: true } }],
+    });
+
+    expect(resultado.alertas).toContainEqual({ codigo: 'MANIFESTO_COM_PROBLEMAS', nivel: 'aviso' });
+  });
+
+  it('retorna APLICACAO_ERRO como erro', () => {
+    const resultado = gerarAlertasScrivener({
+      pacotes: [{ manifesto: { valido: true }, aplicacao: { status: 'erro', auditada: true, precisaBackup: false, temBackup: false } }],
+    });
+
+    expect(resultado.alertas).toContainEqual({ codigo: 'APLICACAO_ERRO', nivel: 'erro' });
+  });
+
+  it('retorna RESTAURACAO_ERRO como erro', () => {
+    const resultado = gerarAlertasScrivener({
+      pacotes: [{ manifesto: { valido: true }, restauracao: { status: 'erro', auditada: true, precisaBackup: false, temBackup: false } }],
+    });
+
+    expect(resultado.alertas).toContainEqual({ codigo: 'RESTAURACAO_ERRO', nivel: 'erro' });
+  });
+
+  it('retorna APLICACAO_BLOQUEADA como aviso', () => {
+    const resultado = gerarAlertasScrivener({
+      pacotes: [{ manifesto: { valido: true }, aplicacao: { status: 'bloqueada', auditada: true, precisaBackup: false, temBackup: false } }],
+    });
+
+    expect(resultado.alertas).toContainEqual({ codigo: 'APLICACAO_BLOQUEADA', nivel: 'aviso' });
+  });
+
+  it('retorna RESTAURACAO_BLOQUEADA como aviso', () => {
+    const resultado = gerarAlertasScrivener({
+      pacotes: [{ manifesto: { valido: true }, restauracao: { status: 'bloqueada', auditada: true, precisaBackup: false, temBackup: false } }],
+    });
+
+    expect(resultado.alertas).toContainEqual({ codigo: 'RESTAURACAO_BLOQUEADA', nivel: 'aviso' });
+  });
+
+  it('retorna APLICACAO_NAO_AUDITADA como aviso', () => {
+    const resultado = gerarAlertasScrivener({
+      pacotes: [{ manifesto: { valido: true }, aplicacao: { status: 'ok', auditada: false, precisaBackup: false, temBackup: false } }],
+    });
+
+    expect(resultado.alertas).toContainEqual({ codigo: 'APLICACAO_NAO_AUDITADA', nivel: 'aviso' });
+  });
+
+  it('retorna RESTAURACAO_NAO_AUDITADA como aviso', () => {
+    const resultado = gerarAlertasScrivener({
+      pacotes: [{ manifesto: { valido: true }, restauracao: { status: 'ok', auditada: false, precisaBackup: false, temBackup: false } }],
+    });
+
+    expect(resultado.alertas).toContainEqual({ codigo: 'RESTAURACAO_NAO_AUDITADA', nivel: 'aviso' });
+  });
+
+  it('retorna SEM_BACKUP_APLICACAO quando backup de aplicacao e necessario e ausente', () => {
+    const resultado = gerarAlertasScrivener({
+      pacotes: [{ manifesto: { valido: true }, aplicacao: { status: 'ok', auditada: true, precisaBackup: true, temBackup: false } }],
+    });
+
+    expect(resultado.alertas).toContainEqual({ codigo: 'SEM_BACKUP_APLICACAO', nivel: 'aviso' });
+  });
+
+  it('retorna SEM_BACKUP_RESTAURACAO quando backup de restauracao e necessario e ausente', () => {
+    const resultado = gerarAlertasScrivener({
+      pacotes: [{ manifesto: { valido: true }, restauracao: { status: 'ok', auditada: true, precisaBackup: true, temBackup: false } }],
+    });
+
+    expect(resultado.alertas).toContainEqual({ codigo: 'SEM_BACKUP_RESTAURACAO', nivel: 'aviso' });
+  });
+
+  it('nao retorna alertas quando o pacote mais recente esta limpo', () => {
+    const resultado = gerarAlertasScrivener({ pacotes: [pacoteLimpo()] });
+
+    expect(resultado.semAlertas).toBe(true);
+    expect(resultado.alertas).toHaveLength(0);
+    expect(resultado.contagens).toEqual({ erros: 0, avisos: 0, infos: 0, total: 0 });
+  });
+
+  it('calcula contagens por nivel', () => {
+    const resultado = gerarAlertasScrivener({
+      pacotes: [{
+        manifesto: { valido: true, comProblemas: true },
+        aplicacao: { status: 'erro', auditada: true, precisaBackup: false, temBackup: false },
+        restauracao: { status: 'ok', auditada: false, precisaBackup: false, temBackup: false },
+      }],
+    });
+
+    expect(resultado.contagens).toEqual({ erros: 1, avisos: 2, infos: 0, total: 3 });
+  });
+
+  it('combina multiplos alertas no mesmo pacote', () => {
+    const status: EstadoPainelScrivener = {
+      pacotes: [{
+        manifesto: { valido: true, comProblemas: true },
+        aplicacao: { status: 'bloqueada', auditada: false, precisaBackup: true, temBackup: false },
+        restauracao: { status: 'bloqueada', auditada: false, precisaBackup: true, temBackup: false },
+      }],
+    };
+
+    const resultado = gerarAlertasScrivener(status);
+
+    expect(resultado.alertas).toHaveLength(7);
+    expect(codigos(status)).toEqual([
+      'MANIFESTO_COM_PROBLEMAS',
+      'APLICACAO_BLOQUEADA',
+      'APLICACAO_NAO_AUDITADA',
+      'SEM_BACKUP_APLICACAO',
+      'RESTAURACAO_BLOQUEADA',
+      'RESTAURACAO_NAO_AUDITADA',
+      'SEM_BACKUP_RESTAURACAO',
+    ]);
+  });
+
+  it('usa apenas o pacote mais recente', () => {
+    const resultado = gerarAlertasScrivener({
+      pacotes: [
+        { manifesto: { valido: false } },
+        pacoteLimpo(),
+      ],
+    });
+
+    expect(resultado.semAlertas).toBe(true);
+    expect(resultado.alertas).toHaveLength(0);
+  });
+
+  it('nao gera alerta de backup quando backup esta presente', () => {
+    const status: EstadoPainelScrivener = {
+      pacotes: [{
+        manifesto: { valido: true },
+        aplicacao: { status: 'ok', auditada: true, precisaBackup: true, temBackup: true },
+        restauracao: { status: 'ok', auditada: true, precisaBackup: true, temBackup: true },
+      }],
+    };
+
+    const resultado = gerarAlertasScrivener(status);
+
+    expect(codigos(status)).not.toContain('SEM_BACKUP_APLICACAO');
+    expect(resultado.alertas.map((alerta) => alerta.codigo)).not.toContain('SEM_BACKUP_RESTAURACAO');
+  });
+
+  it('nao muta o input', () => {
+    const pacote: EstadoPacoteScrivener = {
+      manifesto: { valido: true, comProblemas: true },
+      aplicacao: { status: 'bloqueada', auditada: false, precisaBackup: true, temBackup: false },
+    };
+    const status: EstadoPainelScrivener = { pacotes: [pacote] };
+    const antes = JSON.stringify(status);
+
+    gerarAlertasScrivener(status);
+
+    expect(JSON.stringify(status)).toBe(antes);
+  });
+
+  it('retorna estrutura imutavel e estruturas imutaveis', () => {
+    const resultado = gerarAlertasScrivener({ pacotes: [pacoteLimpo()] });
+
+    expect(Object.isFrozen(resultado)).toBe(true);
+    expect(Object.isFrozen(resultado.alertas)).toBe(true);
+    expect(Object.isFrozen(resultado.contagens)).toBe(true);
+    expect(() => {
+      (resultado.alertas as AlertaScrivener[]).push({ codigo: 'SEM_PACOTES', nivel: 'info' });
+    }).toThrow();
+  });
+});
+
