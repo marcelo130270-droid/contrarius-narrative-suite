@@ -12,6 +12,7 @@ import { confirmWithModal } from './modals/ui/ConfirmModal';
 import type { TemplateEntityType } from './templates/TemplateTypes';
 import { gerarAlertasScrivener, type AlertaScrivener, type EstadoPainelScrivener } from './contrarius/scrivener-alerts-panel-model';
 import { ScrivenerBridgeService } from './contrarius/scrivener-bridge-service';
+import type { ResultadoPlanoEscritaPacoteScrivenerOperacional } from './contrarius/scrivener-bridge-service';
 import type { ContextoManifestoScrivenerOperacional } from './contrarius/scrivener-package-manifest-factory';
 import { resumirEstadoScrivener, type ResumoEstadoScrivener } from './contrarius/scrivener-state-summary-model';
 import { listarHistoricoPacotesScrivener, type ItemHistoricoPacoteScrivener } from './contrarius/scrivener-package-history-model';
@@ -1235,6 +1236,7 @@ export class StorytellerSuiteSettingTab extends PluginSettingTab {
         const resumoEstado = resumirEstadoScrivener(estadoPainel.pacotes);
         const historicoPacotes = listarHistoricoPacotesScrivener(estadoPainel.pacotes);
         const previewPacote = this.getScrivenerBridgeService().criarPreviewPacoteOperacional(this.getOperationalScrivenerManifestContext());
+        const planoEscrita = this.getScrivenerBridgeService().criarPlanoEscritaPacoteOperacional(this.getOperationalScrivenerManifestContext());
         const resultado = gerarAlertasScrivener(estadoPainel);
         const panel = container.createDiv('sts-scrivener-alerts-panel');
         const header = panel.createDiv('sts-scrivener-alerts-header');
@@ -1252,6 +1254,7 @@ export class StorytellerSuiteSettingTab extends PluginSettingTab {
         this.renderScrivenerStateSummary(container, resumoEstado);
         this.renderScrivenerPackageHistory(container, historicoPacotes);
         this.renderScrivenerPackagePreview(container, previewPacote);
+        this.renderScrivenerWritePlanPreview(container, planoEscrita);
 
         new Setting(container)
             .setName('Diagnostic package state')
@@ -1348,6 +1351,19 @@ export class StorytellerSuiteSettingTab extends PluginSettingTab {
 
 
 
+    private renderScrivenerWritePlanPreview(container: HTMLElement, planoEscrita: ResultadoPlanoEscritaPacoteScrivenerOperacional): void {
+        const escrita = planoEscrita.escrita;
+
+        new Setting(container)
+            .setName('Operational write plan preview')
+            .setDesc(`Package path: ${escrita.caminhoPacote}; planned write operations: ${escrita.totalOperacoes}; logical write size: ${escrita.tamanhoTotalCaracteres} characters. No files are written yet.`);
+
+        for (const operacao of escrita.operacoes) {
+            new Setting(container)
+                .setName(`${operacao.tipo} · ${operacao.caminhoRelativo}`)
+                .setDesc(`Destination: ${operacao.caminhoDestino}; size: ${operacao.tamanhoCaracteres} character(s).`);
+        }
+    }
     private renderScrivenerPackagePreview(container: HTMLElement, previewPacote: ResultadoPlanoPacoteScrivenerOperacional): void {
         const plano = previewPacote.plano;
         const manifesto = previewPacote.manifesto;
