@@ -13,6 +13,8 @@ import type { ResultadoPlanoPacoteScrivenerOperacional } from './scrivener-packa
 import { criarPlanoPacoteOperacionalScrivener } from './scrivener-package-plan-factory';
 import type { PlanoEscritaPacoteScrivener } from './scrivener-package-write-plan-model';
 import { criarPlanoEscritaPacoteScrivener } from './scrivener-package-write-plan-model';
+import type { AdaptadorEscritaPacoteScrivener, ResultadoExecucaoEscritaPacoteScrivener } from './scrivener-package-write-executor';
+import { executarPlanoEscritaPacoteScrivener } from './scrivener-package-write-executor';
 
 export interface ScrivenerBridgeSettingsHost {
   settings: {
@@ -26,6 +28,10 @@ export interface ResultadoPlanoEscritaPacoteScrivenerOperacional {
     escrita: PlanoEscritaPacoteScrivener;
 }
 
+export interface ResultadoExecucaoPacoteScrivenerOperacional {
+    planoEscrita: ResultadoPlanoEscritaPacoteScrivenerOperacional;
+    execucao: ResultadoExecucaoEscritaPacoteScrivener;
+}
 export class ScrivenerBridgeService {
   constructor(private readonly host: ScrivenerBridgeSettingsHost) {}
 
@@ -86,5 +92,18 @@ export class ScrivenerBridgeService {
         };
     }
 
+
+    async executarEscritaPacoteOperacional(
+        contexto: ContextoManifestoScrivenerOperacional,
+        adaptador: AdaptadorEscritaPacoteScrivener,
+    ): Promise<ResultadoExecucaoPacoteScrivenerOperacional> {
+        const planoEscrita = this.criarPlanoEscritaPacoteOperacional(contexto);
+        const execucao = await executarPlanoEscritaPacoteScrivener(planoEscrita.escrita, adaptador);
+
+        return {
+            planoEscrita,
+            execucao,
+        };
+    }
 
 }

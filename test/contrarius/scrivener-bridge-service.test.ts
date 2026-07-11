@@ -264,3 +264,95 @@ describe('ScrivenerBridgeService write plan', () => {
         expect(saveCount).toBe(0);
     });
 });
+
+describe('ScrivenerBridgeService write execution', () => {
+    it('executes an operational package write plan through an injected adapter', async () => {
+        const arquivos = new Map<string, string>();
+        const service = new ScrivenerBridgeService({
+            settings: {},
+            async saveSettings() {
+                // No settings persistence is expected for injected write execution.
+            },
+        });
+
+        const resultado = await service.executarEscritaPacoteOperacional(
+            {
+                tipo: 'exportacao',
+                origemVault: 'Contrarius Enantios',
+                diretorioPacotes: 'contrarius-scrivener-packages',
+                livro: 'Livro 1',
+                agora: '2000-01-01T00:00:00.000Z',
+            },
+            {
+                async escreverArquivoTexto(caminhoDestino, conteudo) {
+                    arquivos.set(caminhoDestino, conteudo);
+                },
+            },
+        );
+
+        expect(resultado.planoEscrita.preview.manifesto.id).toBe('exportacao-livro-1-2000-01-01t00-00-00-000z');
+        expect(resultado.execucao.totalOperacoes).toBe(3);
+        expect(resultado.execucao.operacoesOk).toBe(3);
+        expect(resultado.execucao.operacoesErro).toBe(0);
+        expect(arquivos.size).toBe(3);
+        expect(arquivos.get('contrarius-scrivener-packages/exportacao-livro-1-2000-01-01t00-00-00-000z.scrivener-package/manifest.json')).toContain('exportacao-livro-1');
+    });
+
+    it('returns write execution errors without throwing from the bridge service', async () => {
+        const service = new ScrivenerBridgeService({
+            settings: {},
+            async saveSettings() {
+                // No settings persistence is expected for failed write execution previews.
+            },
+        });
+
+        const resultado = await service.executarEscritaPacoteOperacional(
+            {
+                tipo: 'exportacao',
+                origemVault: 'Contrarius Enantios',
+                diretorioPacotes: 'contrarius-scrivener-packages',
+                livro: 'Livro 1',
+                agora: '2000-01-01T00:00:00.000Z',
+            },
+            {
+                async escreverArquivoTexto(caminhoDestino) {
+                    if (caminhoDestino.endsWith('payload/index.json')) {
+                        throw new Error('Falha simulada pelo bridge');
+                    }
+                },
+            },
+        );
+
+        expect(resultado.execucao.totalOperacoes).toBe(3);
+        expect(resultado.execucao.operacoesOk).toBe(2);
+        expect(resultado.execucao.operacoesErro).toBe(1);
+        expect(resultado.execucao.resultados[1].erro).toBe('Falha simulada pelo bridge');
+    });
+
+    it('does not persist settings while executing through an injected adapter', async () => {
+        let saveCount = 0;
+        const service = new ScrivenerBridgeService({
+            settings: {},
+            async saveSettings() {
+                saveCount += 1;
+            },
+        });
+
+        await service.executarEscritaPacoteOperacional(
+            {
+                tipo: 'aplicacao',
+                origemVault: 'Vault',
+                diretorioPacotes: 'pacotes',
+                livro: 'Livro 2',
+                agora: '2000-01-02T00:00:00.000Z',
+            },
+            {
+                async escreverArquivoTexto() {
+                    // no-op
+                },
+            },
+        );
+
+        expect(saveCount).toBe(0);
+    });
+});
