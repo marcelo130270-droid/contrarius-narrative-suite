@@ -12,6 +12,7 @@ import { confirmWithModal } from './modals/ui/ConfirmModal';
 import type { TemplateEntityType } from './templates/TemplateTypes';
 import { gerarAlertasScrivener, type AlertaScrivener, type EstadoPainelScrivener } from './contrarius/scrivener-alerts-panel-model';
 import { ScrivenerBridgeService } from './contrarius/scrivener-bridge-service';
+import type { ContextoManifestoScrivenerOperacional } from './contrarius/scrivener-package-manifest-factory';
 
 type TabId = 'stories' | 'dashboard' | 'folders' | 'timeline' | 'maps' | 'templates' | 'gallery' | 'scrivener' | 'help';
 
@@ -1260,6 +1261,17 @@ export class StorytellerSuiteSettingTab extends PluginSettingTab {
                     this.renderScrivenerTab(container);
                 }));
 
+        new Setting(container)
+            .setName('Operational manifest state')
+            .setDesc('Register an operational Scrivener manifest without writing Scrivener files yet. This exercises the UI → service → factory → manifest → persisted state flow.')
+            .addButton(button => button
+                .setButtonText('Register operational manifest')
+                .onClick(async () => {
+                    await this.registerOperationalScrivenerManifest();
+                    container.empty();
+                    this.renderScrivenerTab(container);
+                }));
+
         if (resultado.alertas.length === 0) {
             panel.createDiv({
                 cls: 'setting-item-description',
@@ -1276,10 +1288,38 @@ export class StorytellerSuiteSettingTab extends PluginSettingTab {
         }
 
         new Setting(container)
+            .setName('Operational manifest')
+            .setDesc('Register a synthetic operational manifest entry using ScrivenerBridgeService. No real Scrivener files are read or written.')
+            .addButton(button => button
+                .setButtonText('Register operational manifest')
+                .onClick(async () => {
+                    await this.registerOperationalScrivenerManifest();
+                    container.empty();
+                    this.renderScrivenerTab(container);
+                }));
+
+        new Setting(container)
             .setName('Integration status')
             .setDesc('The Scrivener alerts model is now fed by persisted plugin state. The next phase will write real package/apply/restore results into this state.');
     }
 
+    private async registerOperationalScrivenerManifest(): Promise<void> {
+        await this.getScrivenerBridgeService().registrarManifestoOperacional(this.getOperationalScrivenerManifestContext());
+        new Notice('Operational Scrivener manifest state saved.');
+    }
+
+    private getOperationalScrivenerManifestContext(): ContextoManifestoScrivenerOperacional {
+        const vaultName = this.app.vault.getName() || 'contrarius-vault';
+        const origemVault = vaultName;
+        const livro = 'operational-preview';
+        return {
+            tipo: 'exportacao',
+            origemVault,
+            diretorioPacotes: 'contrarius-scrivener-packages',
+            livro,
+            observacoes: 'Operational manifest preview generated from the Scrivener settings tab.',
+        };
+    }
     private getScrivenerBridgeService(): ScrivenerBridgeService {
         return new ScrivenerBridgeService(this.plugin);
     }
@@ -1293,6 +1333,8 @@ export class StorytellerSuiteSettingTab extends PluginSettingTab {
         await this.getScrivenerBridgeService().limparPacotes();
         new Notice('Scrivener package state cleared.');
     }
+
+    
 
     private getScrivenerPanelState(): EstadoPainelScrivener {
         return this.getScrivenerBridgeService().getEstadoPainel();
