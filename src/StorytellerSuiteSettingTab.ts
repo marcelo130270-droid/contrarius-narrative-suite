@@ -15,6 +15,7 @@ import { ScrivenerBridgeService } from './contrarius/scrivener-bridge-service';
 import type { ContextoManifestoScrivenerOperacional } from './contrarius/scrivener-package-manifest-factory';
 import { resumirEstadoScrivener, type ResumoEstadoScrivener } from './contrarius/scrivener-state-summary-model';
 import { listarHistoricoPacotesScrivener, type ItemHistoricoPacoteScrivener } from './contrarius/scrivener-package-history-model';
+import { criarPlanoPacoteOperacionalScrivener, type ResultadoPlanoPacoteScrivenerOperacional } from './contrarius/scrivener-package-plan-factory';
 
 type TabId = 'stories' | 'dashboard' | 'folders' | 'timeline' | 'maps' | 'templates' | 'gallery' | 'scrivener' | 'help';
 
@@ -1233,6 +1234,7 @@ export class StorytellerSuiteSettingTab extends PluginSettingTab {
         const estadoPainel = this.getScrivenerPanelState();
         const resumoEstado = resumirEstadoScrivener(estadoPainel.pacotes);
         const historicoPacotes = listarHistoricoPacotesScrivener(estadoPainel.pacotes);
+        const previewPacote = criarPlanoPacoteOperacionalScrivener(this.getOperationalScrivenerManifestContext());
         const resultado = gerarAlertasScrivener(estadoPainel);
         const panel = container.createDiv('sts-scrivener-alerts-panel');
         const header = panel.createDiv('sts-scrivener-alerts-header');
@@ -1249,6 +1251,7 @@ export class StorytellerSuiteSettingTab extends PluginSettingTab {
 
         this.renderScrivenerStateSummary(container, resumoEstado);
         this.renderScrivenerPackageHistory(container, historicoPacotes);
+        this.renderScrivenerPackagePreview(container, previewPacote);
 
         new Setting(container)
             .setName('Diagnostic package state')
@@ -1343,6 +1346,24 @@ export class StorytellerSuiteSettingTab extends PluginSettingTab {
 
     
 
+
+
+    private renderScrivenerPackagePreview(container: HTMLElement, previewPacote: ResultadoPlanoPacoteScrivenerOperacional): void {
+        const plano = previewPacote.plano;
+        const manifesto = previewPacote.manifesto;
+        const erros = manifesto.erros.length > 0 ? manifesto.erros.join(', ') : 'none';
+        const avisos = manifesto.avisos.length > 0 ? manifesto.avisos.join(', ') : 'none';
+
+        new Setting(container)
+            .setName('Operational package preview')
+            .setDesc(`Manifest: ${manifesto.id}; type: ${manifesto.tipo}; files: ${plano.totalArquivos}; logical size: ${plano.tamanhoTotalCaracteres} characters; errors: ${erros}; warnings: ${avisos}. No Scrivener files are written yet.`);
+
+        for (const arquivo of plano.arquivos) {
+            new Setting(container)
+                .setName(`${arquivo.tipo} · ${arquivo.caminhoRelativo}`)
+                .setDesc(`${arquivo.tamanhoCaracteres} character(s) planned for this preview file.`);
+        }
+    }
 
     private renderScrivenerPackageHistory(container: HTMLElement, historicoPacotes: ItemHistoricoPacoteScrivener[]): void {
         if (historicoPacotes.length === 0) {
