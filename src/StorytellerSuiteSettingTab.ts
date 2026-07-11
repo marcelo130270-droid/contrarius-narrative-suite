@@ -10,7 +10,8 @@ import { setLocale, t, getAvailableLanguages, getLanguageName, isLanguageAvailab
 import { VIEW_TYPE_DASHBOARD } from './views/DashboardView';
 import { confirmWithModal } from './modals/ui/ConfirmModal';
 import type { TemplateEntityType } from './templates/TemplateTypes';
-import { gerarAlertasScrivener, type AlertaScrivener, type EstadoPainelScrivener, type EstadoPacoteScrivener } from './contrarius/scrivener-alerts-panel-model';
+import { gerarAlertasScrivener, type AlertaScrivener, type EstadoPainelScrivener } from './contrarius/scrivener-alerts-panel-model';
+import { adicionarPacoteScrivener, criarPacoteDiagnosticoScrivener, limparPacotesScrivener } from './contrarius/scrivener-package-state-store';
 
 type TabId = 'stories' | 'dashboard' | 'folders' | 'timeline' | 'maps' | 'templates' | 'gallery' | 'scrivener' | 'help';
 
@@ -1280,20 +1281,16 @@ export class StorytellerSuiteSettingTab extends PluginSettingTab {
     }
 
     private async addDiagnosticScrivenerPackage(): Promise<void> {
-        const pacote: EstadoPacoteScrivener = {
-            manifesto: { valido: true, comProblemas: true },
-            aplicacao: { status: 'ok', auditada: false, precisaBackup: true, temBackup: false },
-            restauracao: { status: 'bloqueada', auditada: true, precisaBackup: true, temBackup: true },
-        };
-
-        const pacotes = [...(this.plugin.settings.scrivenerPacotes ?? []), pacote];
-        this.plugin.settings.scrivenerPacotes = pacotes.slice(-10);
+        this.plugin.settings.scrivenerPacotes = adicionarPacoteScrivener(
+            this.plugin.settings.scrivenerPacotes,
+            criarPacoteDiagnosticoScrivener(),
+        );
         await this.plugin.saveSettings();
         new Notice('Diagnostic Scrivener package state saved.');
     }
 
     private async clearScrivenerPackages(): Promise<void> {
-        this.plugin.settings.scrivenerPacotes = [];
+        this.plugin.settings.scrivenerPacotes = limparPacotesScrivener();
         await this.plugin.saveSettings();
         new Notice('Scrivener package state cleared.');
     }
