@@ -59,15 +59,16 @@ export function listarHistoricoPacotesScrivener(
             const status = statusDoPacoteScrivener(pacote);
             const livroTexto = livro ?? 'sem livro';
 
-            return {
+            const itemBase = {
                 id,
                 criadoEm,
                 tipo,
                 origemVault,
                 caminhoPacote,
-                livro,
                 status,
                 descricao: `${status} · ${criadoEm} · ${livroTexto} · ${caminhoPacote}`,
             };
+
+            return livro ? { ...itemBase, livro } : itemBase;
         });
 }
