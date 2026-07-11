@@ -1326,11 +1326,13 @@ export class StorytellerSuiteSettingTab extends PluginSettingTab {
         const vaultName = this.app.vault.getName() || 'contrarius-vault';
         const origemVault = vaultName;
         const livro = 'operational-preview';
+        const agora = new Date();
         return {
             tipo: 'exportacao',
             origemVault,
             diretorioPacotes: 'contrarius-scrivener-packages',
             livro,
+            agora,
             observacoes: 'Operational manifest preview generated from the Scrivener settings tab.',
         };
     }
