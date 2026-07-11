@@ -2,6 +2,7 @@
  
 
 // Leaflet base styles are maintained in styles.css so Obsidian can lint authored CSS.
+import type { EstadoPacoteScrivener } from './contrarius/scrivener-alerts-panel-model';
 import * as L from 'leaflet';
 
 // Note: Global Leaflet exposure is now conditional and happens in onload() after settings are loaded
@@ -201,6 +202,9 @@ const FRONTMATTER_LINK_ONLY_SCALAR_FIELDS = new Set([
  * These settings are persisted in Obsidian's data.json file
  */
  interface StorytellerSuiteSettings {
+    /** Persisted Scrivener package state used by the Contrarius/Scrivener bridge */
+    scrivenerPacotes?: EstadoPacoteScrivener[];
+
     stories: Story[]; // List of all stories
     activeStoryId: string; // Currently selected story
     galleryUploadFolder: string; // New setting for uploads
@@ -403,6 +407,7 @@ const FRONTMATTER_LINK_ONLY_SCALAR_FIELDS = new Set([
  * Default plugin settings - used on first install or when settings are missing
  */
  const DEFAULT_SETTINGS: StorytellerSuiteSettings = {
+    scrivenerPacotes: [],
     stories: [],
     activeStoryId: '',
     galleryUploadFolder: 'StorytellerSuite/GalleryUploads',
@@ -8993,6 +8998,11 @@ export default class StorytellerSuitePlugin extends Plugin {
         }
 
 		// MIGRATION: If no stories exist but old folders/data exist, migrate
+        if (!Array.isArray(this.settings.scrivenerPacotes)) {
+            this.settings.scrivenerPacotes = [];
+            settingsUpdated = true;
+        }
+
 		if ((!this.settings.stories || this.settings.stories.length === 0)) {
 			// Try to detect old folders with data
 			const vault = this.app.vault;
