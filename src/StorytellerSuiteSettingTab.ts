@@ -1235,8 +1235,9 @@ export class StorytellerSuiteSettingTab extends PluginSettingTab {
         const estadoPainel = this.getScrivenerPanelState();
         const resumoEstado = resumirEstadoScrivener(estadoPainel.pacotes);
         const historicoPacotes = listarHistoricoPacotesScrivener(estadoPainel.pacotes);
-        const previewPacote = this.getScrivenerBridgeService().criarPreviewPacoteOperacional(this.getOperationalScrivenerManifestContext());
-        const planoEscrita = this.getScrivenerBridgeService().criarPlanoEscritaPacoteOperacional(this.getOperationalScrivenerManifestContext());
+        const contextoOperacionalScrivener = this.getOperationalScrivenerManifestContext();
+        const previewPacote = this.getScrivenerBridgeService().criarPreviewPacoteOperacional(contextoOperacionalScrivener);
+        const planoEscrita = this.getScrivenerBridgeService().criarPlanoEscritaPacoteOperacional(contextoOperacionalScrivener);
         const resultado = gerarAlertasScrivener(estadoPainel);
         const panel = container.createDiv('sts-scrivener-alerts-panel');
         const header = panel.createDiv('sts-scrivener-alerts-header');
