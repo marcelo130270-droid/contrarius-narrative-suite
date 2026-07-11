@@ -19,6 +19,8 @@ import type { AdaptadorControladoEscritaScrivenerOptions, GravadorPacoteScrivene
 import { criarAdaptadorControladoEscritaPacoteScrivener } from './scrivener-package-controlled-write-adapter';
 import { criarGravadorPacoteScrivenerObsidian } from './scrivener-obsidian-write-adapter';
 import type { DataAdapterEscritaScrivenerLike } from './scrivener-obsidian-write-adapter';
+import type { FontePayloadContrariusScrivener, ResultadoExtracaoPayloadContrariusScrivener } from './scrivener-contrarius-payload-extractor';
+import { extrairItensPayloadContrariusScrivener } from './scrivener-contrarius-payload-extractor';
 
 export interface ScrivenerBridgeSettingsHost {
   settings: {
@@ -127,6 +129,30 @@ export class ScrivenerBridgeService {
             planoEscrita,
             execucao,
         };
+    }
+
+    extrairPayloadContrarius(
+        fonte: FontePayloadContrariusScrivener,
+    ): ResultadoExtracaoPayloadContrariusScrivener {
+        return extrairItensPayloadContrariusScrivener(fonte);
+    }
+
+    criarPreviewPacoteOperacionalComPayloadContrarius(
+        contexto: ContextoManifestoScrivenerOperacional,
+        fonte: FontePayloadContrariusScrivener,
+    ): ResultadoPlanoPacoteScrivenerOperacional {
+        const resultado = extrairItensPayloadContrariusScrivener(fonte);
+        return criarPlanoPacoteOperacionalScrivener({ ...contexto, itensPayload: resultado.itens });
+    }
+
+    criarPlanoEscritaPacoteOperacionalComPayloadContrarius(
+        contexto: ContextoManifestoScrivenerOperacional,
+        fonte: FontePayloadContrariusScrivener,
+    ): ResultadoPlanoEscritaPacoteScrivenerOperacional {
+        const resultado = extrairItensPayloadContrariusScrivener(fonte);
+        const preview = criarPlanoPacoteOperacionalScrivener({ ...contexto, itensPayload: resultado.itens });
+        const escrita = criarPlanoEscritaPacoteScrivener(preview.plano);
+        return { preview, escrita };
     }
 
 }

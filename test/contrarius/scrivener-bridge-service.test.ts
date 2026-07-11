@@ -3,6 +3,7 @@ import { ScrivenerBridgeService } from '../../src/contrarius/scrivener-bridge-se
 import type { ScrivenerBridgeSettingsHost } from '../../src/contrarius/scrivener-bridge-service';
 import type { EstadoPacoteScrivener } from '../../src/contrarius/scrivener-alerts-panel-model';
 import type { ContextoManifestoScrivenerOperacional } from '../../src/contrarius/scrivener-package-manifest-factory';
+import type { FontePayloadContrariusScrivener } from '../../src/contrarius/scrivener-contrarius-payload-extractor';
 
 function makeHost(pacotes?: EstadoPacoteScrivener[]): ScrivenerBridgeSettingsHost & { saveSettings: ReturnType<typeof vi.fn> } {
   return {
@@ -488,6 +489,116 @@ describe('ScrivenerBridgeService controlled write execution', () => {
         expect(resultado.execucao.operacoesErro).toBe(0);
         expect(memoria.arquivos.get(caminhoManifesto)).toContain('exportacao-livro-1');
     });
+});
+
+describe('ScrivenerBridgeService Contrarius payload extraction', () => {
+  const CONTEXTO: ContextoManifestoScrivenerOperacional = {
+    tipo: 'exportacao',
+    origemVault: 'Contrarius Enantios',
+    diretorioPacotes: 'contrarius-scrivener-packages',
+    livro: 'Livro 1',
+    agora: '2000-01-01T00:00:00.000Z',
+  };
+
+  function makeService() {
+    return new ScrivenerBridgeService({ settings: {}, async saveSettings() {} });
+  }
+
+  it('extrairPayloadContrarius retorna itens e avisos', () => {
+    const service = makeService();
+    const fonte: FontePayloadContrariusScrivener = {
+      consciencias: [
+        { id: 'c1', titulo: 'Consciência 1' },
+        { id: 'c2', titulo: 'Consciência 2' },
+      ],
+      eventos: [{ id: 'ev1', titulo: 'Evento 1' }],
+    };
+    const resultado = service.extrairPayloadContrarius(fonte);
+    expect(resultado.totalItens).toBe(3);
+    expect(resultado.descartados).toBe(0);
+    expect(resultado.avisos).toEqual([]);
+    const tipos = resultado.itens.map(i => i.tipo);
+    expect(tipos).toContain('consciencia');
+    expect(tipos).toContain('evento');
+  });
+
+  it('item inválido aparece em avisos mas não no payload', () => {
+    const service = makeService();
+    const fonte: FontePayloadContrariusScrivener = {
+      lugares: [
+        { id: 'l1', titulo: 'Lugar Válido' },
+        { titulo: 'Sem id' },
+        null as unknown as Record<string, unknown>,
+      ],
+    };
+    const resultado = service.extrairPayloadContrarius(fonte);
+    expect(resultado.totalItens).toBe(1);
+    expect(resultado.descartados).toBe(2);
+    expect(resultado.avisos.length).toBe(2);
+    expect(resultado.itens[0].id).toBe('l1');
+  });
+
+  it('criarPreviewPacoteOperacionalComPayloadContrarius injeta itens no payload/index.json', () => {
+    const service = makeService();
+    const fonte: FontePayloadContrariusScrivener = {
+      consciencias: [{ id: 'c1', titulo: 'Personagem A' }],
+      eventos: [{ id: 'ev1', titulo: 'Grande Evento' }],
+    };
+    const preview = service.criarPreviewPacoteOperacionalComPayloadContrarius(CONTEXTO, fonte);
+    const payloadArquivo = preview.plano.arquivos.find(a => a.caminhoRelativo === 'payload/index.json');
+    expect(payloadArquivo).toBeDefined();
+    const payload = JSON.parse(payloadArquivo!.conteudo);
+    expect(payload.totalItens).toBe(2);
+    const ids = payload.itens.map((i: { id: string }) => i.id);
+    expect(ids).toContain('c1');
+    expect(ids).toContain('ev1');
+  });
+
+  it('criarPlanoEscritaPacoteOperacionalComPayloadContrarius injeta itens no plano de escrita', () => {
+    const service = makeService();
+    const fonte: FontePayloadContrariusScrivener = {
+      retrovidas: [{ id: 'rv1', titulo: 'Retrovida 1' }],
+    };
+    const resultado = service.criarPlanoEscritaPacoteOperacionalComPayloadContrarius(CONTEXTO, fonte);
+    expect(resultado.preview.manifesto.id).toBe('exportacao-livro-1-2000-01-01t00-00-00-000z');
+    expect(resultado.escrita.totalOperacoes).toBe(3);
+
+    const payloadOp = resultado.escrita.operacoes.find(o => o.caminhoRelativo === 'payload/index.json');
+    expect(payloadOp).toBeDefined();
+    const payload = JSON.parse(payloadOp!.conteudo);
+    expect(payload.totalItens).toBe(1);
+    expect(payload.itens[0].id).toBe('rv1');
+  });
+
+  it('extrairPayloadContrarius não chama saveSettings', () => {
+    let saveCount = 0;
+    const service = new ScrivenerBridgeService({
+      settings: {},
+      async saveSettings() { saveCount += 1; },
+    });
+    service.extrairPayloadContrarius({ notas: [{ id: 'n1', titulo: 'Nota' }] });
+    expect(saveCount).toBe(0);
+  });
+
+  it('criarPreviewPacoteOperacionalComPayloadContrarius não chama saveSettings', () => {
+    let saveCount = 0;
+    const service = new ScrivenerBridgeService({
+      settings: {},
+      async saveSettings() { saveCount += 1; },
+    });
+    service.criarPreviewPacoteOperacionalComPayloadContrarius(CONTEXTO, {});
+    expect(saveCount).toBe(0);
+  });
+
+  it('criarPlanoEscritaPacoteOperacionalComPayloadContrarius não chama saveSettings', () => {
+    let saveCount = 0;
+    const service = new ScrivenerBridgeService({
+      settings: {},
+      async saveSettings() { saveCount += 1; },
+    });
+    service.criarPlanoEscritaPacoteOperacionalComPayloadContrarius(CONTEXTO, {});
+    expect(saveCount).toBe(0);
+  });
 });
 
 describe('ScrivenerBridgeService Obsidian write execution', () => {
