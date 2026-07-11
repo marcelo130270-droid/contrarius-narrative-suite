@@ -15,7 +15,7 @@ import { ScrivenerBridgeService } from './contrarius/scrivener-bridge-service';
 import type { ContextoManifestoScrivenerOperacional } from './contrarius/scrivener-package-manifest-factory';
 import { resumirEstadoScrivener, type ResumoEstadoScrivener } from './contrarius/scrivener-state-summary-model';
 import { listarHistoricoPacotesScrivener, type ItemHistoricoPacoteScrivener } from './contrarius/scrivener-package-history-model';
-import { criarPlanoPacoteOperacionalScrivener, type ResultadoPlanoPacoteScrivenerOperacional } from './contrarius/scrivener-package-plan-factory';
+import type { ResultadoPlanoPacoteScrivenerOperacional } from './contrarius/scrivener-package-plan-factory';
 
 type TabId = 'stories' | 'dashboard' | 'folders' | 'timeline' | 'maps' | 'templates' | 'gallery' | 'scrivener' | 'help';
 
@@ -1234,7 +1234,7 @@ export class StorytellerSuiteSettingTab extends PluginSettingTab {
         const estadoPainel = this.getScrivenerPanelState();
         const resumoEstado = resumirEstadoScrivener(estadoPainel.pacotes);
         const historicoPacotes = listarHistoricoPacotesScrivener(estadoPainel.pacotes);
-        const previewPacote = criarPlanoPacoteOperacionalScrivener(this.getOperationalScrivenerManifestContext());
+        const previewPacote = this.getScrivenerBridgeService().criarPreviewPacoteOperacional(this.getOperationalScrivenerManifestContext());
         const resultado = gerarAlertasScrivener(estadoPainel);
         const panel = container.createDiv('sts-scrivener-alerts-panel');
         const header = panel.createDiv('sts-scrivener-alerts-header');

@@ -185,3 +185,31 @@ describe('ScrivenerBridgeService', () => {
     });
   });
 });
+
+
+describe('ScrivenerBridgeService package preview', () => {
+    it('creates an operational package preview through the bridge service', () => {
+        const service = new ScrivenerBridgeService({
+            settings: {},
+            async saveSettings() {
+                // No persistence is expected for previews.
+            },
+        });
+
+        const preview = service.criarPreviewPacoteOperacional({
+            tipo: 'exportacao',
+            origemVault: 'Contrarius Enantios',
+            diretorioPacotes: 'contrarius-scrivener-packages',
+            livro: 'Livro 1',
+            agora: '2000-01-01T00:00:00.000Z',
+        });
+
+        expect(preview.manifesto.id).toBe('exportacao-livro-1-2000-01-01t00-00-00-000z');
+        expect(preview.plano.totalArquivos).toBe(3);
+        expect(preview.plano.arquivos.map(arquivo => arquivo.caminhoRelativo)).toEqual([
+            'manifest.json',
+            'payload/index.json',
+            'README.md',
+        ]);
+    });
+});

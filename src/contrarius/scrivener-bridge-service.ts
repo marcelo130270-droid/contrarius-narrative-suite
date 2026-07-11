@@ -9,6 +9,8 @@ import type { EntradaManifestoScrivener, ManifestoScrivener } from './scrivener-
 import { manifestoParaEstadoPacoteScrivener, validarManifestoScrivener } from './scrivener-package-manifest';
 import type { ContextoManifestoScrivenerOperacional } from './scrivener-package-manifest-factory';
 import { criarEntradaManifestoOperacionalScrivener } from './scrivener-package-manifest-factory';
+import type { ResultadoPlanoPacoteScrivenerOperacional } from './scrivener-package-plan-factory';
+import { criarPlanoPacoteOperacionalScrivener } from './scrivener-package-plan-factory';
 
 export interface ScrivenerBridgeSettingsHost {
   settings: {
@@ -58,4 +60,11 @@ export class ScrivenerBridgeService {
     const entrada = criarEntradaManifestoOperacionalScrivener(contexto);
     return this.registrarManifestoInicial(entrada);
   }
+    criarPreviewPacoteOperacional(
+        contexto: ContextoManifestoScrivenerOperacional,
+    ): ResultadoPlanoPacoteScrivenerOperacional {
+        return criarPlanoPacoteOperacionalScrivener(contexto);
+    }
+
+
 }
