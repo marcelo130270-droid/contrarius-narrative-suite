@@ -1,4 +1,5 @@
-﻿import { describe, expect, it } from 'vitest';
+﻿// metadata
+import { describe, expect, it } from 'vitest';
 import {
   gerarAlertasScrivener,
   type AlertaScrivener,
@@ -194,6 +195,47 @@ describe('gerarAlertasScrivener', () => {
     gerarAlertasScrivener(status);
 
     expect(JSON.stringify(status)).toBe(antes);
+  });
+
+  it('nao cria alertas extras quando manifesto tem metadados e valido=true', () => {
+    const resultado = gerarAlertasScrivener({
+      pacotes: [{
+        manifesto: {
+          valido: true,
+          comProblemas: false,
+          id: 'pkg-meta',
+          criadoEm: '2024-01-01T00:00:00.000Z',
+          tipo: 'exportacao',
+          origemVault: 'vault',
+          caminhoPacote: 'pacote.scrivener-package',
+          avisos: [],
+          erros: [],
+        },
+      }],
+    });
+
+    expect(resultado.semAlertas).toBe(true);
+    expect(resultado.alertas).toHaveLength(0);
+  });
+
+  it('retorna MANIFESTO_INVALIDO quando metadados estao presentes mas manifesto.valido e false', () => {
+    const resultado = gerarAlertasScrivener({
+      pacotes: [{
+        manifesto: {
+          valido: false,
+          comProblemas: true,
+          id: 'pkg-invalido',
+          criadoEm: '',
+          tipo: 'diagnostico',
+          origemVault: '',
+          caminhoPacote: '',
+          avisos: [],
+          erros: ['MANIFESTO_ID_AUSENTE'],
+        },
+      }],
+    });
+
+    expect(resultado.alertas).toEqual([{ codigo: 'MANIFESTO_INVALIDO', nivel: 'erro' }]);
   });
 
   it('retorna estrutura imutavel e estruturas imutaveis', () => {

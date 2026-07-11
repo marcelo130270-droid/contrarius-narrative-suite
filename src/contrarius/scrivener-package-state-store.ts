@@ -12,7 +12,13 @@ export function normalizarPacotesScrivener(
 
   const limiteSeguro = Number.isFinite(limite) && limite > 0 ? Math.floor(limite) : LIMITE_PACOTES_SCRIVENER;
   return pacotes.slice(-limiteSeguro).map(pacote => ({
-    manifesto: pacote.manifesto ? { ...pacote.manifesto } : undefined,
+    manifesto: pacote.manifesto
+      ? {
+          ...pacote.manifesto,
+          ...(pacote.manifesto.avisos !== undefined ? { avisos: [...pacote.manifesto.avisos] } : {}),
+          ...(pacote.manifesto.erros !== undefined ? { erros: [...pacote.manifesto.erros] } : {}),
+        }
+      : undefined,
     aplicacao: pacote.aplicacao ? { ...pacote.aplicacao } : undefined,
     restauracao: pacote.restauracao ? { ...pacote.restauracao } : undefined,
   }));

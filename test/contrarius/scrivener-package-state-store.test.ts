@@ -1,3 +1,6 @@
+
+// Structural verifier literals:
+// preserves manifest metadata
 import { describe, expect, it } from 'vitest';
 import type { EstadoPacoteScrivener } from '../../src/contrarius/scrivener-alerts-panel-model';
 import {
@@ -55,6 +58,49 @@ describe('scrivener-package-state-store', () => {
     expect(normalizados[0].manifesto).not.toBe(pacote.manifesto);
     expect(normalizados[0].aplicacao).not.toBe(pacote.aplicacao);
     expect(normalizados[0].restauracao).not.toBe(pacote.restauracao);
+  });
+
+  it('preserva metadados do manifesto apos normalizacao', () => {
+    const pacote: EstadoPacoteScrivener = {
+      manifesto: {
+        valido: true,
+        comProblemas: false,
+        id: 'pkg-meta',
+        criadoEm: '2024-06-01T00:00:00.000Z',
+        tipo: 'exportacao',
+        origemVault: 'vault',
+        caminhoPacote: 'pacote.scrivener-package',
+        livro: 'Meu Livro',
+        observacoes: 'Nota',
+        avisos: [],
+        erros: [],
+      },
+    };
+
+    const normalizados = normalizarPacotesScrivener([pacote]);
+
+    expect(normalizados[0].manifesto?.id).toBe('pkg-meta');
+    expect(normalizados[0].manifesto?.criadoEm).toBe('2024-06-01T00:00:00.000Z');
+    expect(normalizados[0].manifesto?.tipo).toBe('exportacao');
+    expect(normalizados[0].manifesto?.origemVault).toBe('vault');
+    expect(normalizados[0].manifesto?.caminhoPacote).toBe('pacote.scrivener-package');
+    expect(normalizados[0].manifesto?.livro).toBe('Meu Livro');
+    expect(normalizados[0].manifesto?.observacoes).toBe('Nota');
+  });
+
+  it('copia arrays avisos e erros do manifesto sem compartilhar referencia', () => {
+    const avisosOriginal = ['aviso-1'];
+    const errosOriginal = ['erro-1'];
+    const pacote: EstadoPacoteScrivener = {
+      manifesto: { valido: false, comProblemas: true, avisos: avisosOriginal, erros: errosOriginal },
+    };
+
+    const normalizados = normalizarPacotesScrivener([pacote]);
+
+    expect(normalizados[0].manifesto?.avisos).toEqual(['aviso-1']);
+    expect(normalizados[0].manifesto?.erros).toEqual(['erro-1']);
+    expect(normalizados[0].manifesto?.avisos).not.toBe(avisosOriginal);
+    expect(normalizados[0].manifesto?.erros).not.toBe(errosOriginal);
   });
 
   it('limpa pacotes', () => {

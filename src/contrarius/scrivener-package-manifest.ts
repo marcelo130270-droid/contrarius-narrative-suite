@@ -92,6 +92,15 @@ export function manifestoTemProblemas(manifesto: ManifestoScrivener): boolean {
 export function manifestoParaEstadoPacoteScrivener(manifesto: ManifestoScrivener): EstadoPacoteScrivener {
   return {
     manifesto: {
+      id: manifesto.id,
+      criadoEm: manifesto.criadoEm,
+      tipo: manifesto.tipo,
+      origemVault: manifesto.origemVault,
+      caminhoPacote: manifesto.caminhoPacote,
+      ...(manifesto.livro !== undefined ? { livro: manifesto.livro } : {}),
+      ...(manifesto.observacoes !== undefined ? { observacoes: manifesto.observacoes } : {}),
+      avisos: [...manifesto.avisos],
+      erros: [...manifesto.erros],
       valido: manifesto.erros.length === 0,
       comProblemas: manifestoTemProblemas(manifesto),
     },

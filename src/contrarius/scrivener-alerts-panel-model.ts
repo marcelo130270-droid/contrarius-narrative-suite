@@ -43,6 +43,15 @@ export interface EstadoOperacaoScrivener {
 export interface EstadoManifestoScrivener {
   readonly valido?: boolean;
   readonly comProblemas?: boolean;
+  readonly id?: string;
+  readonly criadoEm?: string;
+  readonly tipo?: 'diagnostico' | 'exportacao' | 'aplicacao' | 'restauracao';
+  readonly origemVault?: string;
+  readonly caminhoPacote?: string;
+  readonly livro?: string;
+  readonly observacoes?: string;
+  readonly avisos?: string[];
+  readonly erros?: string[];
 }
 
 export interface EstadoPacoteScrivener {

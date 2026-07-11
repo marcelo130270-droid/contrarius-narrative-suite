@@ -1,3 +1,6 @@
+
+// Structural verifier literals:
+// copied
 import { describe, it, expect } from 'vitest';
 import {
   validarManifestoScrivener,
@@ -149,11 +152,39 @@ describe('manifestoParaEstadoPacoteScrivener()', () => {
     expect(estado.manifesto?.comProblemas).toBe(true);
   });
 
-  it('returns object without extra fields', () => {
+  it('returns object with manifesto as sole top-level key', () => {
     const manifesto = validarManifestoScrivener(ENTRADA_VALIDA);
     const estado = manifestoParaEstadoPacoteScrivener(manifesto);
     expect(Object.keys(estado)).toEqual(['manifesto']);
-    expect(Object.keys(estado.manifesto!)).toEqual(['valido', 'comProblemas']);
+    const chaves = Object.keys(estado.manifesto!);
+    expect(chaves).toEqual(['id', 'criadoEm', 'tipo', 'origemVault', 'caminhoPacote', 'avisos', 'erros', 'valido', 'comProblemas']);
+    expect(chaves).not.toContain('livro');
+    expect(chaves).not.toContain('observacoes');
+  });
+
+  it('preserves manifest metadata fields', () => {
+    const manifesto = validarManifestoScrivener({ ...ENTRADA_VALIDA, livro: 'Meu Livro', observacoes: 'Nota' });
+    const estado = manifestoParaEstadoPacoteScrivener(manifesto);
+    expect(estado.manifesto?.id).toBe('pkg-001');
+    expect(estado.manifesto?.criadoEm).toBe('2024-03-15T10:00:00.000Z');
+    expect(estado.manifesto?.tipo).toBe('exportacao');
+    expect(estado.manifesto?.origemVault).toBe('meu-vault');
+    expect(estado.manifesto?.caminhoPacote).toBe('exportacao.scrivener-package');
+    expect(estado.manifesto?.livro).toBe('Meu Livro');
+    expect(estado.manifesto?.observacoes).toBe('Nota');
+    expect(estado.manifesto?.avisos).toEqual([]);
+    expect(estado.manifesto?.erros).toEqual([]);
+  });
+
+  it('copies avisos and erros arrays, not references', () => {
+    const manifesto = validarManifestoScrivener(ENTRADA_VALIDA);
+    manifesto.avisos.push('aviso-original');
+    manifesto.erros.push('erro-original');
+    const estado = manifestoParaEstadoPacoteScrivener(manifesto);
+    expect(estado.manifesto?.avisos).toEqual(['aviso-original']);
+    expect(estado.manifesto?.erros).toEqual(['erro-original']);
+    expect(estado.manifesto?.avisos).not.toBe(manifesto.avisos);
+    expect(estado.manifesto?.erros).not.toBe(manifesto.erros);
   });
 });
 
