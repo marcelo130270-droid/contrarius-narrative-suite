@@ -56,4 +56,95 @@ describe('scrivener-package-plan-factory', () => {
         expect(resultado.plano.arquivos.every(arquivo => typeof arquivo.conteudo === 'string')).toBe(true);
         expect(resultado.plano.tamanhoTotalCaracteres).toBeGreaterThan(0);
     });
+
+    it('payload/index.json has schema contrarius-scrivener-payload/v1 and manifestoId when no itensPayload', () => {
+        const resultado = criarPlanoPacoteOperacionalScrivener({
+            tipo: 'exportacao',
+            origemVault: 'Vault',
+            diretorioPacotes: 'pacotes',
+            livro: 'Livro 1',
+            agora: '2000-01-01T00:00:00.000Z',
+        });
+
+        const payloadIndex = resultado.plano.arquivos.find(a => a.caminhoRelativo === 'payload/index.json');
+        const parsed = JSON.parse(payloadIndex?.conteudo ?? '{}');
+
+        expect(parsed.schema).toBe('contrarius-scrivener-payload/v1');
+        expect(parsed.manifestoId).toBe(resultado.manifesto.id);
+        expect(parsed.totalItens).toBe(0);
+        expect(parsed.itens).toEqual([]);
+    });
+
+    it('quando itensPayload fornecidos, aparecem no payload/index.json ordenados', () => {
+        const resultado = criarPlanoPacoteOperacionalScrivener({
+            tipo: 'exportacao',
+            origemVault: 'Vault',
+            diretorioPacotes: 'pacotes',
+            livro: 'Livro 1',
+            agora: '2000-01-01T00:00:00.000Z',
+            itensPayload: [
+                { id: 'c', tipo: 'evento', titulo: 'Cena', ordemNarrativa: 3 },
+                { id: 'a', tipo: 'lugar', titulo: 'Alfa', ordemNarrativa: 1 },
+                { id: 'b', tipo: 'nota', titulo: 'Beta', ordemNarrativa: 2 },
+            ],
+        });
+
+        const payloadIndex = resultado.plano.arquivos.find(a => a.caminhoRelativo === 'payload/index.json');
+        const parsed = JSON.parse(payloadIndex?.conteudo ?? '{}');
+
+        expect(parsed.schema).toBe('contrarius-scrivener-payload/v1');
+        expect(parsed.totalItens).toBe(3);
+        expect(parsed.itens.map((i: { id: string }) => i.id)).toEqual(['a', 'b', 'c']);
+    });
+
+    it('itens inválidos em itensPayload são descartados', () => {
+        const resultado = criarPlanoPacoteOperacionalScrivener({
+            tipo: 'exportacao',
+            origemVault: 'Vault',
+            diretorioPacotes: 'pacotes',
+            agora: '2000-01-01T00:00:00.000Z',
+            itensPayload: [
+                { id: 'valido', tipo: 'evento', titulo: 'Válido' },
+                { id: '', tipo: 'evento', titulo: 'Sem id' },
+                { id: 'sem-titulo', tipo: 'lugar' },
+            ],
+        });
+
+        const payloadIndex = resultado.plano.arquivos.find(a => a.caminhoRelativo === 'payload/index.json');
+        const parsed = JSON.parse(payloadIndex?.conteudo ?? '{}');
+
+        expect(parsed.totalItens).toBe(1);
+        expect(parsed.itens[0].id).toBe('valido');
+    });
+
+    it('ordenação do payload é preservada quando itens não têm ordemNarrativa', () => {
+        const resultado = criarPlanoPacoteOperacionalScrivener({
+            tipo: 'restauracao',
+            origemVault: 'Vault',
+            diretorioPacotes: 'pacotes',
+            agora: '2000-01-01T00:00:00.000Z',
+            itensPayload: [
+                { id: 'z', tipo: 'objeto', titulo: 'Zebra' },
+                { id: 'a', tipo: 'grupo', titulo: 'Alfa' },
+                { id: 'm', tipo: 'relacao', titulo: 'Meio' },
+            ],
+        });
+
+        const payloadIndex = resultado.plano.arquivos.find(a => a.caminhoRelativo === 'payload/index.json');
+        const parsed = JSON.parse(payloadIndex?.conteudo ?? '{}');
+
+        expect(parsed.itens.map((i: { titulo: string }) => i.titulo)).toEqual(['Alfa', 'Meio', 'Zebra']);
+    });
+
+    it('chamadas antigas sem itensPayload continuam funcionando', () => {
+        const resultado = criarPlanoPacoteOperacionalScrivener({
+            tipo: 'aplicacao',
+            origemVault: 'Vault Antigo',
+            diretorioPacotes: 'pacotes',
+            agora: '2000-06-15T12:00:00.000Z',
+        });
+
+        expect(resultado.manifesto.tipo).toBe('aplicacao');
+        expect(resultado.plano.totalArquivos).toBe(3);
+    });
 });

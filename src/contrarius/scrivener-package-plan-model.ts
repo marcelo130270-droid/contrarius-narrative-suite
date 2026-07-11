@@ -1,4 +1,6 @@
 import type { ManifestoScrivener } from './scrivener-package-manifest';
+import type { PayloadScrivener } from './scrivener-package-payload-model';
+import { criarPayloadScrivener } from './scrivener-package-payload-model';
 
 export type TipoArquivoPlanoScrivener = 'manifest' | 'payload' | 'readme';
 
@@ -14,6 +16,10 @@ export interface PlanoPacoteScrivener {
     arquivos: ArquivoPlanoPacoteScrivener[];
     totalArquivos: number;
     tamanhoTotalCaracteres: number;
+}
+
+export interface OpcoesPlanoPacoteScrivener {
+    payload?: PayloadScrivener;
 }
 
 function criarArquivoPlanoScrivener(
@@ -43,14 +49,8 @@ function criarManifestJson(manifesto: ManifestoScrivener): string {
     }, null, 2);
 }
 
-function criarPayloadIndexJson(manifesto: ManifestoScrivener): string {
-    return JSON.stringify({
-        schema: 'contrarius-scrivener-package-preview/v1',
-        manifestoId: manifesto.id,
-        tipo: manifesto.tipo,
-        livro: manifesto.livro ?? null,
-        itens: [],
-    }, null, 2);
+function gerarPayloadIndexJson(payload: PayloadScrivener): string {
+    return JSON.stringify(payload, null, 2);
 }
 
 function criarReadme(manifesto: ManifestoScrivener): string {
@@ -69,10 +69,18 @@ function criarReadme(manifesto: ManifestoScrivener): string {
     ].join('\n');
 }
 
-export function criarPlanoPacoteScrivener(manifesto: ManifestoScrivener): PlanoPacoteScrivener {
+export function criarPlanoPacoteScrivener(
+    manifesto: ManifestoScrivener,
+    options: OpcoesPlanoPacoteScrivener = {},
+): PlanoPacoteScrivener {
+    const payload = options.payload ?? criarPayloadScrivener({
+        manifestoId: manifesto.id,
+        geradoEm: manifesto.criadoEm,
+    });
+
     const arquivos = [
         criarArquivoPlanoScrivener('manifest.json', 'manifest', criarManifestJson(manifesto)),
-        criarArquivoPlanoScrivener('payload/index.json', 'payload', criarPayloadIndexJson(manifesto)),
+        criarArquivoPlanoScrivener('payload/index.json', 'payload', gerarPayloadIndexJson(payload)),
         criarArquivoPlanoScrivener('README.md', 'readme', criarReadme(manifesto)),
     ];
 
