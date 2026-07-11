@@ -13,6 +13,7 @@ import type { TemplateEntityType } from './templates/TemplateTypes';
 import { gerarAlertasScrivener, type AlertaScrivener, type EstadoPainelScrivener } from './contrarius/scrivener-alerts-panel-model';
 import { ScrivenerBridgeService } from './contrarius/scrivener-bridge-service';
 import type { ContextoManifestoScrivenerOperacional } from './contrarius/scrivener-package-manifest-factory';
+import { resumirEstadoScrivener, type ResumoEstadoScrivener } from './contrarius/scrivener-state-summary-model';
 
 type TabId = 'stories' | 'dashboard' | 'folders' | 'timeline' | 'maps' | 'templates' | 'gallery' | 'scrivener' | 'help';
 
@@ -1229,6 +1230,7 @@ export class StorytellerSuiteSettingTab extends PluginSettingTab {
         });
 
         const estadoPainel = this.getScrivenerPanelState();
+        const resumoEstado = resumirEstadoScrivener(estadoPainel.pacotes);
         const resultado = gerarAlertasScrivener(estadoPainel);
         const panel = container.createDiv('sts-scrivener-alerts-panel');
         const header = panel.createDiv('sts-scrivener-alerts-header');
@@ -1242,6 +1244,8 @@ export class StorytellerSuiteSettingTab extends PluginSettingTab {
         new Setting(container)
             .setName('Persisted packages')
             .setDesc(`${estadoPainel.pacotes?.length ?? 0} Scrivener package state record(s) stored in plugin settings.`);
+
+        this.renderScrivenerStateSummary(container, resumoEstado);
 
         new Setting(container)
             .setName('Diagnostic package state')
@@ -1335,6 +1339,14 @@ export class StorytellerSuiteSettingTab extends PluginSettingTab {
     }
 
     
+
+    private renderScrivenerStateSummary(container: HTMLElement, resumoEstado: ResumoEstadoScrivener): void {
+        new Setting(container)
+            .setName('Persisted state summary')
+            .setDesc(
+                `${resumoEstado.mensagem} Valid: ${resumoEstado.pacotesValidos}; invalid: ${resumoEstado.pacotesInvalidos}; with problems: ${resumoEstado.pacotesComProblemas}; blocked: ${resumoEstado.pacotesComBloqueio}.`,
+            );
+    }
 
     private getScrivenerPanelState(): EstadoPainelScrivener {
         return this.getScrivenerBridgeService().getEstadoPainel();
