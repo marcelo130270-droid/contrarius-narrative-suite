@@ -14,6 +14,7 @@ import { gerarAlertasScrivener, type AlertaScrivener, type EstadoPainelScrivener
 import { ScrivenerBridgeService } from './contrarius/scrivener-bridge-service';
 import type { ContextoManifestoScrivenerOperacional } from './contrarius/scrivener-package-manifest-factory';
 import { resumirEstadoScrivener, type ResumoEstadoScrivener } from './contrarius/scrivener-state-summary-model';
+import { listarHistoricoPacotesScrivener, type ItemHistoricoPacoteScrivener } from './contrarius/scrivener-package-history-model';
 
 type TabId = 'stories' | 'dashboard' | 'folders' | 'timeline' | 'maps' | 'templates' | 'gallery' | 'scrivener' | 'help';
 
@@ -1231,6 +1232,7 @@ export class StorytellerSuiteSettingTab extends PluginSettingTab {
 
         const estadoPainel = this.getScrivenerPanelState();
         const resumoEstado = resumirEstadoScrivener(estadoPainel.pacotes);
+        const historicoPacotes = listarHistoricoPacotesScrivener(estadoPainel.pacotes);
         const resultado = gerarAlertasScrivener(estadoPainel);
         const panel = container.createDiv('sts-scrivener-alerts-panel');
         const header = panel.createDiv('sts-scrivener-alerts-header');
@@ -1246,6 +1248,7 @@ export class StorytellerSuiteSettingTab extends PluginSettingTab {
             .setDesc(`${estadoPainel.pacotes?.length ?? 0} Scrivener package state record(s) stored in plugin settings.`);
 
         this.renderScrivenerStateSummary(container, resumoEstado);
+        this.renderScrivenerPackageHistory(container, historicoPacotes);
 
         new Setting(container)
             .setName('Diagnostic package state')
@@ -1339,6 +1342,26 @@ export class StorytellerSuiteSettingTab extends PluginSettingTab {
     }
 
     
+
+
+    private renderScrivenerPackageHistory(container: HTMLElement, historicoPacotes: ItemHistoricoPacoteScrivener[]): void {
+        if (historicoPacotes.length === 0) {
+            new Setting(container)
+                .setName('Persisted package history')
+                .setDesc('No persisted Scrivener packages to list yet.');
+            return;
+        }
+
+        new Setting(container)
+            .setName('Persisted package history')
+            .setDesc(`Showing ${historicoPacotes.length} most recent persisted Scrivener package state record(s).`);
+
+        for (const item of historicoPacotes) {
+            new Setting(container)
+                .setName(`${item.tipo} · ${item.id}`)
+                .setDesc(item.descricao);
+        }
+    }
 
     private renderScrivenerStateSummary(container: HTMLElement, resumoEstado: ResumoEstadoScrivener): void {
         new Setting(container)
