@@ -7,6 +7,8 @@ import {
 } from './scrivener-package-state-store';
 import type { EntradaManifestoScrivener, ManifestoScrivener } from './scrivener-package-manifest';
 import { manifestoParaEstadoPacoteScrivener, validarManifestoScrivener } from './scrivener-package-manifest';
+import type { ContextoManifestoScrivenerOperacional } from './scrivener-package-manifest-factory';
+import { criarEntradaManifestoOperacionalScrivener } from './scrivener-package-manifest-factory';
 
 export interface ScrivenerBridgeSettingsHost {
   settings: {
@@ -48,5 +50,12 @@ export class ScrivenerBridgeService {
     const pacote = manifestoParaEstadoPacoteScrivener(manifesto);
     await this.registrarPacote(pacote);
     return manifesto;
+  }
+
+  async registrarManifestoOperacional(
+    contexto: ContextoManifestoScrivenerOperacional,
+  ): Promise<ManifestoScrivener> {
+    const entrada = criarEntradaManifestoOperacionalScrivener(contexto);
+    return this.registrarManifestoInicial(entrada);
   }
 }

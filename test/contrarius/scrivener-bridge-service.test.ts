@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ScrivenerBridgeService } from '../../src/contrarius/scrivener-bridge-service';
 import type { ScrivenerBridgeSettingsHost } from '../../src/contrarius/scrivener-bridge-service';
 import type { EstadoPacoteScrivener } from '../../src/contrarius/scrivener-alerts-panel-model';
+import type { ContextoManifestoScrivenerOperacional } from '../../src/contrarius/scrivener-package-manifest-factory';
 
 function makeHost(pacotes?: EstadoPacoteScrivener[]): ScrivenerBridgeSettingsHost & { saveSettings: ReturnType<typeof vi.fn> } {
   return {
@@ -113,6 +114,43 @@ describe('ScrivenerBridgeService', () => {
       const service = new ScrivenerBridgeService(host);
       await service.limparPacotes();
       expect(host.settings.scrivenerPacotes).toEqual([]);
+      expect(host.saveSettings).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('registrarManifestoOperacional()', () => {
+    const CONTEXTO_VALIDO: ContextoManifestoScrivenerOperacional = {
+      tipo: 'exportacao',
+      origemVault: 'meu-vault',
+      diretorioPacotes: '/pacotes',
+      livro: 'Meu Livro',
+      agora: new Date('2024-03-15T10:00:00.000Z'),
+    };
+
+    it('with valid operational context: returns clean manifest, stores one valid package, calls saveSettings once', async () => {
+      const host = makeHost([]);
+      const service = new ScrivenerBridgeService(host);
+      const manifesto = await service.registrarManifestoOperacional(CONTEXTO_VALIDO);
+      expect(manifesto.erros).toEqual([]);
+      expect(manifesto.tipo).toBe('exportacao');
+      expect(host.settings.scrivenerPacotes).toHaveLength(1);
+      expect(host.settings.scrivenerPacotes![0].manifesto?.valido).toBe(true);
+      expect(host.settings.scrivenerPacotes![0].manifesto?.comProblemas).toBe(false);
+      expect(host.saveSettings).toHaveBeenCalledTimes(1);
+    });
+
+    it('with invalid operational context caused by empty origemVault: returns manifest with errors, stores one invalid package, calls saveSettings once', async () => {
+      const host = makeHost([]);
+      const service = new ScrivenerBridgeService(host);
+      const manifesto = await service.registrarManifestoOperacional({
+        ...CONTEXTO_VALIDO,
+        origemVault: '',
+        diretorioPacotes: '',
+      });
+      expect(manifesto.erros.length).toBeGreaterThan(0);
+      expect(host.settings.scrivenerPacotes).toHaveLength(1);
+      expect(host.settings.scrivenerPacotes![0].manifesto?.valido).toBe(false);
+      expect(host.settings.scrivenerPacotes![0].manifesto?.comProblemas).toBe(true);
       expect(host.saveSettings).toHaveBeenCalledTimes(1);
     });
   });
