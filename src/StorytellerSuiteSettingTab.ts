@@ -10,7 +10,7 @@ import { setLocale, t, getAvailableLanguages, getLanguageName, isLanguageAvailab
 import { VIEW_TYPE_DASHBOARD } from './views/DashboardView';
 import { confirmWithModal } from './modals/ui/ConfirmModal';
 import type { TemplateEntityType } from './templates/TemplateTypes';
-import { gerarAlertasScrivener, type AlertaScrivener, type EstadoPainelScrivener } from './contrarius/scrivener-alerts-panel-model';
+import { gerarAlertasScrivener, type AlertaScrivener, type EstadoPainelScrivener, type EstadoPacoteScrivener } from './contrarius/scrivener-alerts-panel-model';
 
 type TabId = 'stories' | 'dashboard' | 'folders' | 'timeline' | 'maps' | 'templates' | 'gallery' | 'scrivener' | 'help';
 
@@ -1241,6 +1241,24 @@ export class StorytellerSuiteSettingTab extends PluginSettingTab {
             .setName('Persisted packages')
             .setDesc(`${estadoPainel.pacotes?.length ?? 0} Scrivener package state record(s) stored in plugin settings.`);
 
+        new Setting(container)
+            .setName('Diagnostic package state')
+            .setDesc('Add or clear persisted Scrivener package records to verify that the panel is reading saved state.')
+            .addButton(button => button
+                .setButtonText('Add diagnostic package')
+                .onClick(async () => {
+                    await this.addDiagnosticScrivenerPackage();
+                    container.empty();
+                    this.renderScrivenerTab(container);
+                }))
+            .addButton(button => button
+                .setButtonText('Clear packages')
+                .onClick(async () => {
+                    await this.clearScrivenerPackages();
+                    container.empty();
+                    this.renderScrivenerTab(container);
+                }));
+
         if (resultado.alertas.length === 0) {
             panel.createDiv({
                 cls: 'setting-item-description',
@@ -1259,6 +1277,25 @@ export class StorytellerSuiteSettingTab extends PluginSettingTab {
         new Setting(container)
             .setName('Integration status')
             .setDesc('The Scrivener alerts model is now fed by persisted plugin state. The next phase will write real package/apply/restore results into this state.');
+    }
+
+    private async addDiagnosticScrivenerPackage(): Promise<void> {
+        const pacote: EstadoPacoteScrivener = {
+            manifesto: { valido: true, comProblemas: true },
+            aplicacao: { status: 'ok', auditada: false, precisaBackup: true, temBackup: false },
+            restauracao: { status: 'bloqueada', auditada: true, precisaBackup: true, temBackup: true },
+        };
+
+        const pacotes = [...(this.plugin.settings.scrivenerPacotes ?? []), pacote];
+        this.plugin.settings.scrivenerPacotes = pacotes.slice(-10);
+        await this.plugin.saveSettings();
+        new Notice('Diagnostic Scrivener package state saved.');
+    }
+
+    private async clearScrivenerPackages(): Promise<void> {
+        this.plugin.settings.scrivenerPacotes = [];
+        await this.plugin.saveSettings();
+        new Notice('Scrivener package state cleared.');
     }
 
     private getScrivenerPanelState(): EstadoPainelScrivener {
