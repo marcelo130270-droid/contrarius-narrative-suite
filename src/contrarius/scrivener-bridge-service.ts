@@ -5,6 +5,8 @@ import {
   limparPacotesScrivener,
   normalizarPacotesScrivener,
 } from './scrivener-package-state-store';
+import type { EntradaManifestoScrivener, ManifestoScrivener } from './scrivener-package-manifest';
+import { manifestoParaEstadoPacoteScrivener, validarManifestoScrivener } from './scrivener-package-manifest';
 
 export interface ScrivenerBridgeSettingsHost {
   settings: {
@@ -39,5 +41,12 @@ export class ScrivenerBridgeService {
   async limparPacotes(): Promise<void> {
     this.host.settings.scrivenerPacotes = limparPacotesScrivener();
     await this.host.saveSettings();
+  }
+
+  async registrarManifestoInicial(input: EntradaManifestoScrivener): Promise<ManifestoScrivener> {
+    const manifesto = validarManifestoScrivener(input);
+    const pacote = manifestoParaEstadoPacoteScrivener(manifesto);
+    await this.registrarPacote(pacote);
+    return manifesto;
   }
 }

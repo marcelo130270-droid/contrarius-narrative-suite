@@ -116,4 +116,34 @@ describe('ScrivenerBridgeService', () => {
       expect(host.saveSettings).toHaveBeenCalledTimes(1);
     });
   });
+
+  describe('registrarManifestoInicial()', () => {
+    it('valid input returns no errors, stores package with valido=true and comProblemas=false, calls saveSettings once', async () => {
+      const host = makeHost([]);
+      const service = new ScrivenerBridgeService(host);
+      const manifesto = await service.registrarManifestoInicial({
+        id: 'pkg-001',
+        criadoEm: '2024-03-15T10:00:00.000Z',
+        tipo: 'exportacao',
+        origemVault: 'meu-vault',
+        caminhoPacote: 'exportacao.scrivener-package',
+      });
+      expect(manifesto.erros).toEqual([]);
+      expect(host.settings.scrivenerPacotes).toHaveLength(1);
+      expect(host.settings.scrivenerPacotes![0].manifesto?.valido).toBe(true);
+      expect(host.settings.scrivenerPacotes![0].manifesto?.comProblemas).toBe(false);
+      expect(host.saveSettings).toHaveBeenCalledTimes(1);
+    });
+
+    it('invalid input returns errors, stores package with valido=false and comProblemas=true, calls saveSettings once', async () => {
+      const host = makeHost([]);
+      const service = new ScrivenerBridgeService(host);
+      const manifesto = await service.registrarManifestoInicial({});
+      expect(manifesto.erros.length).toBeGreaterThan(0);
+      expect(host.settings.scrivenerPacotes).toHaveLength(1);
+      expect(host.settings.scrivenerPacotes![0].manifesto?.valido).toBe(false);
+      expect(host.settings.scrivenerPacotes![0].manifesto?.comProblemas).toBe(true);
+      expect(host.saveSettings).toHaveBeenCalledTimes(1);
+    });
+  });
 });
