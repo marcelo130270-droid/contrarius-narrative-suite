@@ -356,3 +356,112 @@ describe('ScrivenerBridgeService write execution', () => {
         expect(saveCount).toBe(0);
     });
 });
+
+describe('ScrivenerBridgeService controlled write execution', () => {
+    function criarGravadorMemoria(arquivosExistentes: Record<string, string> = {}) {
+        const arquivos = new Map<string, string>(Object.entries(arquivosExistentes));
+        const diretorios = new Set<string>();
+        const mkdirs: string[] = [];
+
+        return {
+            arquivos,
+            diretorios,
+            mkdirs,
+            gravador: {
+                async exists(caminho: string) {
+                    return arquivos.has(caminho) || diretorios.has(caminho);
+                },
+                async mkdir(caminho: string) {
+                    diretorios.add(caminho);
+                    mkdirs.push(caminho);
+                },
+                async write(caminho: string, conteudo: string) {
+                    arquivos.set(caminho, conteudo);
+                },
+            },
+        };
+    }
+
+    it('executes through the controlled writer adapter from the bridge service', async () => {
+        const memoria = criarGravadorMemoria();
+        const service = new ScrivenerBridgeService({
+            settings: {},
+            async saveSettings() {
+                // No settings persistence is expected for controlled write execution.
+            },
+        });
+
+        const resultado = await service.executarEscritaPacoteOperacionalControlada(
+            {
+                tipo: 'exportacao',
+                origemVault: 'Contrarius Enantios',
+                diretorioPacotes: 'contrarius-scrivener-packages',
+                livro: 'Livro 1',
+                agora: '2000-01-01T00:00:00.000Z',
+            },
+            memoria.gravador,
+        );
+
+        expect(resultado.execucao.totalOperacoes).toBe(3);
+        expect(resultado.execucao.operacoesOk).toBe(3);
+        expect(resultado.execucao.operacoesErro).toBe(0);
+        expect(memoria.arquivos.get('contrarius-scrivener-packages/exportacao-livro-1-2000-01-01t00-00-00-000z.scrivener-package/manifest.json')).toContain('exportacao-livro-1');
+        expect(memoria.mkdirs).toContain('contrarius-scrivener-packages');
+    });
+
+    it('blocks overwrite by default through the bridge service', async () => {
+        const caminhoManifesto = "pacotes/exportacao-livro-1-2000-01-01t00-00-00-000z.scrivener-package/manifest.json";
+        const memoria = criarGravadorMemoria({
+            [caminhoManifesto]: "old",
+        });
+        const service = new ScrivenerBridgeService({
+            settings: {},
+            async saveSettings() {
+                // no-op
+            },
+        });
+
+        const resultado = await service.executarEscritaPacoteOperacionalControlada(
+            {
+                tipo: 'exportacao',
+                origemVault: 'Contrarius Enantios',
+                diretorioPacotes: 'pacotes',
+                livro: 'Livro 1',
+                agora: '2000-01-01T00:00:00.000Z',
+            },
+            memoria.gravador,
+        );
+
+        expect(resultado.execucao.operacoesErro).toBe(1);
+        expect(resultado.execucao.resultados[0].erro).toContain('sobrescrita esta bloqueada');
+        expect(memoria.arquivos.get(caminhoManifesto)).toBe("old");
+    });
+
+    it('allows overwrite when controlled options explicitly enable it', async () => {
+        const caminhoManifesto = "pacotes/exportacao-livro-1-2000-01-01t00-00-00-000z.scrivener-package/manifest.json";
+        const memoria = criarGravadorMemoria({
+            [caminhoManifesto]: "old",
+        });
+        const service = new ScrivenerBridgeService({
+            settings: {},
+            async saveSettings() {
+                // no-op
+            },
+        });
+
+        const resultado = await service.executarEscritaPacoteOperacionalControlada(
+            {
+                tipo: 'exportacao',
+                origemVault: 'Contrarius Enantios',
+                diretorioPacotes: 'pacotes',
+                livro: 'Livro 1',
+                agora: '2000-01-01T00:00:00.000Z',
+            },
+            memoria.gravador,
+            { sobrescrever: true },
+        );
+
+        expect(resultado.execucao.operacoesErro).toBe(0);
+        expect(memoria.arquivos.get(caminhoManifesto)).toContain('exportacao-livro-1');
+    });
+});

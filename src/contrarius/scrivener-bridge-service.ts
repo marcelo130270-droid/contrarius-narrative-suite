@@ -15,6 +15,8 @@ import type { PlanoEscritaPacoteScrivener } from './scrivener-package-write-plan
 import { criarPlanoEscritaPacoteScrivener } from './scrivener-package-write-plan-model';
 import type { AdaptadorEscritaPacoteScrivener, ResultadoExecucaoEscritaPacoteScrivener } from './scrivener-package-write-executor';
 import { executarPlanoEscritaPacoteScrivener } from './scrivener-package-write-executor';
+import type { AdaptadorControladoEscritaScrivenerOptions, GravadorPacoteScrivener } from './scrivener-package-controlled-write-adapter';
+import { criarAdaptadorControladoEscritaPacoteScrivener } from './scrivener-package-controlled-write-adapter';
 
 export interface ScrivenerBridgeSettingsHost {
   settings: {
@@ -93,6 +95,16 @@ export class ScrivenerBridgeService {
     }
 
 
+    async executarEscritaPacoteOperacionalControlada(
+        contexto: ContextoManifestoScrivenerOperacional,
+        gravador: GravadorPacoteScrivener,
+        options: AdaptadorControladoEscritaScrivenerOptions = {},
+    ): Promise<ResultadoExecucaoPacoteScrivenerOperacional> {
+        return this.executarEscritaPacoteOperacional(
+            contexto,
+            criarAdaptadorControladoEscritaPacoteScrivener(gravador, options),
+        );
+    }
     async executarEscritaPacoteOperacional(
         contexto: ContextoManifestoScrivenerOperacional,
         adaptador: AdaptadorEscritaPacoteScrivener,
