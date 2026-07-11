@@ -11,12 +11,19 @@ import type { ContextoManifestoScrivenerOperacional } from './scrivener-package-
 import { criarEntradaManifestoOperacionalScrivener } from './scrivener-package-manifest-factory';
 import type { ResultadoPlanoPacoteScrivenerOperacional } from './scrivener-package-plan-factory';
 import { criarPlanoPacoteOperacionalScrivener } from './scrivener-package-plan-factory';
+import type { PlanoEscritaPacoteScrivener } from './scrivener-package-write-plan-model';
+import { criarPlanoEscritaPacoteScrivener } from './scrivener-package-write-plan-model';
 
 export interface ScrivenerBridgeSettingsHost {
   settings: {
     scrivenerPacotes?: EstadoPacoteScrivener[];
   };
   saveSettings(): Promise<void>;
+}
+
+export interface ResultadoPlanoEscritaPacoteScrivenerOperacional {
+    preview: ResultadoPlanoPacoteScrivenerOperacional;
+    escrita: PlanoEscritaPacoteScrivener;
 }
 
 export class ScrivenerBridgeService {
@@ -64,6 +71,19 @@ export class ScrivenerBridgeService {
         contexto: ContextoManifestoScrivenerOperacional,
     ): ResultadoPlanoPacoteScrivenerOperacional {
         return criarPlanoPacoteOperacionalScrivener(contexto);
+    }
+
+
+    criarPlanoEscritaPacoteOperacional(
+        contexto: ContextoManifestoScrivenerOperacional,
+    ): ResultadoPlanoEscritaPacoteScrivenerOperacional {
+        const preview = this.criarPreviewPacoteOperacional(contexto);
+        const escrita = criarPlanoEscritaPacoteScrivener(preview.plano);
+
+        return {
+            preview,
+            escrita,
+        };
     }
 
 

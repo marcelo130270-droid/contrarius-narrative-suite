@@ -213,3 +213,54 @@ describe('ScrivenerBridgeService package preview', () => {
         ]);
     });
 });
+
+
+describe('ScrivenerBridgeService write plan', () => {
+    it('creates a planned write operation list through the bridge service', () => {
+        const service = new ScrivenerBridgeService({
+            settings: {},
+            async saveSettings() {
+                // No persistence is expected for write plan previews.
+            },
+        });
+
+        const resultado = service.criarPlanoEscritaPacoteOperacional({
+            tipo: 'exportacao',
+            origemVault: 'Contrarius Enantios',
+            diretorioPacotes: 'contrarius-scrivener-packages',
+            livro: 'Livro 1',
+            agora: '2000-01-01T00:00:00.000Z',
+        });
+
+        expect(resultado.preview.manifesto.id).toBe('exportacao-livro-1-2000-01-01t00-00-00-000z');
+        expect(resultado.escrita.totalOperacoes).toBe(3);
+        expect(resultado.escrita.operacoes.map(operacao => operacao.caminhoRelativo)).toEqual([
+            'manifest.json',
+            'payload/index.json',
+            'README.md',
+        ]);
+        expect(resultado.escrita.operacoes[0].caminhoDestino).toBe(
+            'contrarius-scrivener-packages/exportacao-livro-1-2000-01-01t00-00-00-000z.scrivener-package/manifest.json',
+        );
+    });
+
+    it('does not persist settings while creating a write plan preview', async () => {
+        let saveCount = 0;
+        const service = new ScrivenerBridgeService({
+            settings: {},
+            async saveSettings() {
+                saveCount += 1;
+            },
+        });
+
+        service.criarPlanoEscritaPacoteOperacional({
+            tipo: 'aplicacao',
+            origemVault: 'Vault',
+            diretorioPacotes: 'pacotes',
+            livro: 'Livro 2',
+            agora: '2000-01-02T00:00:00.000Z',
+        });
+
+        expect(saveCount).toBe(0);
+    });
+});
