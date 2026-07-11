@@ -17,6 +17,8 @@ import type { AdaptadorEscritaPacoteScrivener, ResultadoExecucaoEscritaPacoteScr
 import { executarPlanoEscritaPacoteScrivener } from './scrivener-package-write-executor';
 import type { AdaptadorControladoEscritaScrivenerOptions, GravadorPacoteScrivener } from './scrivener-package-controlled-write-adapter';
 import { criarAdaptadorControladoEscritaPacoteScrivener } from './scrivener-package-controlled-write-adapter';
+import { criarGravadorPacoteScrivenerObsidian } from './scrivener-obsidian-write-adapter';
+import type { DataAdapterEscritaScrivenerLike } from './scrivener-obsidian-write-adapter';
 
 export interface ScrivenerBridgeSettingsHost {
   settings: {
@@ -94,6 +96,15 @@ export class ScrivenerBridgeService {
         };
     }
 
+
+    async executarEscritaPacoteOperacionalObsidian(
+        contexto: ContextoManifestoScrivenerOperacional,
+        adapter: DataAdapterEscritaScrivenerLike,
+        options: AdaptadorControladoEscritaScrivenerOptions = {},
+    ): Promise<ResultadoExecucaoPacoteScrivenerOperacional> {
+        const gravador = criarGravadorPacoteScrivenerObsidian(adapter);
+        return this.executarEscritaPacoteOperacionalControlada(contexto, gravador, options);
+    }
 
     async executarEscritaPacoteOperacionalControlada(
         contexto: ContextoManifestoScrivenerOperacional,

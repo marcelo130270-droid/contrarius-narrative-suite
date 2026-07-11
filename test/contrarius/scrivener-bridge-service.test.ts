@@ -437,6 +437,30 @@ describe('ScrivenerBridgeService controlled write execution', () => {
         expect(memoria.arquivos.get(caminhoManifesto)).toBe("old");
     });
 
+    it('does not call saveSettings during controlled write', async () => {
+        let saveCount = 0;
+        const memoria = criarGravadorMemoria();
+        const service = new ScrivenerBridgeService({
+            settings: {},
+            async saveSettings() {
+                saveCount += 1;
+            },
+        });
+
+        await service.executarEscritaPacoteOperacionalControlada(
+            {
+                tipo: 'exportacao',
+                origemVault: 'Contrarius Enantios',
+                diretorioPacotes: 'contrarius-scrivener-packages',
+                livro: 'Livro 1',
+                agora: '2000-01-01T00:00:00.000Z',
+            },
+            memoria.gravador,
+        );
+
+        expect(saveCount).toBe(0);
+    });
+
     it('allows overwrite when controlled options explicitly enable it', async () => {
         const caminhoManifesto = "pacotes/exportacao-livro-1-2000-01-01t00-00-00-000z.scrivener-package/manifest.json";
         const memoria = criarGravadorMemoria({
@@ -463,5 +487,89 @@ describe('ScrivenerBridgeService controlled write execution', () => {
 
         expect(resultado.execucao.operacoesErro).toBe(0);
         expect(memoria.arquivos.get(caminhoManifesto)).toContain('exportacao-livro-1');
+    });
+});
+
+describe('ScrivenerBridgeService Obsidian write execution', () => {
+    function criarAdapterMemoria(arquivosExistentes: Record<string, string> = {}) {
+        const arquivos = new Map<string, string>(Object.entries(arquivosExistentes));
+        const diretorios = new Set<string>();
+
+        return {
+            arquivos,
+            diretorios,
+            adapter: {
+                async exists(caminho: string) {
+                    return arquivos.has(caminho) || diretorios.has(caminho);
+                },
+                async mkdir(caminho: string) {
+                    diretorios.add(caminho);
+                },
+                async write(caminho: string, conteudo: string) {
+                    arquivos.set(caminho, conteudo);
+                },
+            },
+        };
+    }
+
+    const CONTEXTO: ContextoManifestoScrivenerOperacional = {
+        tipo: 'exportacao',
+        origemVault: 'Contrarius Enantios',
+        diretorioPacotes: 'contrarius-scrivener-packages',
+        livro: 'Livro 1',
+        agora: new Date('2000-01-01T00:00:00.000Z'),
+    };
+
+    it('executa escrita operacional usando adapter Obsidian-like em memória', async () => {
+        const memoria = criarAdapterMemoria();
+        const service = new ScrivenerBridgeService({ settings: {}, async saveSettings() {} });
+
+        const resultado = await service.executarEscritaPacoteOperacionalObsidian(CONTEXTO, memoria.adapter);
+
+        expect(resultado.execucao.totalOperacoes).toBe(3);
+        expect(resultado.execucao.operacoesOk).toBe(3);
+        expect(resultado.execucao.operacoesErro).toBe(0);
+        expect(memoria.arquivos.size).toBe(3);
+    });
+
+    it('cria diretórios intermediários', async () => {
+        const memoria = criarAdapterMemoria();
+        const service = new ScrivenerBridgeService({ settings: {}, async saveSettings() {} });
+
+        await service.executarEscritaPacoteOperacionalObsidian(CONTEXTO, memoria.adapter);
+
+        expect(memoria.diretorios.size).toBeGreaterThan(0);
+    });
+
+    it('bloqueia sobrescrita por padrão', async () => {
+        const caminhoManifesto = 'contrarius-scrivener-packages/exportacao-livro-1-2000-01-01t00-00-00-000z.scrivener-package/manifest.json';
+        const memoria = criarAdapterMemoria({ [caminhoManifesto]: 'old' });
+        const service = new ScrivenerBridgeService({ settings: {}, async saveSettings() {} });
+
+        const resultado = await service.executarEscritaPacoteOperacionalObsidian(CONTEXTO, memoria.adapter);
+
+        expect(resultado.execucao.operacoesErro).toBe(1);
+        expect(memoria.arquivos.get(caminhoManifesto)).toBe('old');
+    });
+
+    it('permite sobrescrita com { sobrescrever: true }', async () => {
+        const caminhoManifesto = 'contrarius-scrivener-packages/exportacao-livro-1-2000-01-01t00-00-00-000z.scrivener-package/manifest.json';
+        const memoria = criarAdapterMemoria({ [caminhoManifesto]: 'old' });
+        const service = new ScrivenerBridgeService({ settings: {}, async saveSettings() {} });
+
+        const resultado = await service.executarEscritaPacoteOperacionalObsidian(CONTEXTO, memoria.adapter, { sobrescrever: true });
+
+        expect(resultado.execucao.operacoesErro).toBe(0);
+        expect(memoria.arquivos.get(caminhoManifesto)).toContain('exportacao-livro-1');
+    });
+
+    it('não chama saveSettings', async () => {
+        const memoria = criarAdapterMemoria();
+        let saveCount = 0;
+        const service = new ScrivenerBridgeService({ settings: {}, async saveSettings() { saveCount += 1; } });
+
+        await service.executarEscritaPacoteOperacionalObsidian(CONTEXTO, memoria.adapter);
+
+        expect(saveCount).toBe(0);
     });
 });

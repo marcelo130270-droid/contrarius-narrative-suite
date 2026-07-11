@@ -1258,6 +1258,28 @@ export class StorytellerSuiteSettingTab extends PluginSettingTab {
         this.renderScrivenerWritePlanPreview(container, planoEscrita);
 
         new Setting(container)
+            .setName('Controlled package write')
+            .setDesc('Writes the operational package preview into the vault through the controlled Scrivener writer. Existing files are not overwritten.')
+            .addButton(button => button
+                .setButtonText('Write controlled package')
+                .onClick(async () => {
+                    const contexto = this.getOperationalScrivenerManifestContext();
+                    const resultado = await this.getScrivenerBridgeService().executarEscritaPacoteOperacionalObsidian(
+                        contexto,
+                        this.app.vault.adapter,
+                        { sobrescrever: false },
+                    );
+                    if (resultado.execucao.operacoesErro === 0) {
+                        new Notice('Controlled Scrivener package written.');
+                        await this.getScrivenerBridgeService().registrarManifestoOperacional(contexto);
+                    } else {
+                        new Notice('Controlled Scrivener package write completed with errors.');
+                    }
+                    container.empty();
+                    this.renderScrivenerTab(container);
+                }));
+
+        new Setting(container)
             .setName('Diagnostic package state')
             .setDesc('Add or clear persisted Scrivener package records to verify that the panel is reading saved state.')
             .addButton(button => button
