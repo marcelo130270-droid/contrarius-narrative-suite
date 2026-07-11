@@ -11,7 +11,7 @@ import { VIEW_TYPE_DASHBOARD } from './views/DashboardView';
 import { confirmWithModal } from './modals/ui/ConfirmModal';
 import type { TemplateEntityType } from './templates/TemplateTypes';
 import { gerarAlertasScrivener, type AlertaScrivener, type EstadoPainelScrivener } from './contrarius/scrivener-alerts-panel-model';
-import { adicionarPacoteScrivener, criarPacoteDiagnosticoScrivener, limparPacotesScrivener } from './contrarius/scrivener-package-state-store';
+import { ScrivenerBridgeService } from './contrarius/scrivener-bridge-service';
 
 type TabId = 'stories' | 'dashboard' | 'folders' | 'timeline' | 'maps' | 'templates' | 'gallery' | 'scrivener' | 'help';
 
@@ -1280,25 +1280,22 @@ export class StorytellerSuiteSettingTab extends PluginSettingTab {
             .setDesc('The Scrivener alerts model is now fed by persisted plugin state. The next phase will write real package/apply/restore results into this state.');
     }
 
+    private getScrivenerBridgeService(): ScrivenerBridgeService {
+        return new ScrivenerBridgeService(this.plugin);
+    }
+
     private async addDiagnosticScrivenerPackage(): Promise<void> {
-        this.plugin.settings.scrivenerPacotes = adicionarPacoteScrivener(
-            this.plugin.settings.scrivenerPacotes,
-            criarPacoteDiagnosticoScrivener(),
-        );
-        await this.plugin.saveSettings();
+        await this.getScrivenerBridgeService().registrarPacoteDiagnostico();
         new Notice('Diagnostic Scrivener package state saved.');
     }
 
     private async clearScrivenerPackages(): Promise<void> {
-        this.plugin.settings.scrivenerPacotes = limparPacotesScrivener();
-        await this.plugin.saveSettings();
+        await this.getScrivenerBridgeService().limparPacotes();
         new Notice('Scrivener package state cleared.');
     }
 
     private getScrivenerPanelState(): EstadoPainelScrivener {
-        return {
-            pacotes: this.plugin.settings.scrivenerPacotes ?? [],
-        };
+        return this.getScrivenerBridgeService().getEstadoPainel();
     }
 
     private renderScrivenerAlertItem(container: HTMLElement, alerta: AlertaScrivener): void {
