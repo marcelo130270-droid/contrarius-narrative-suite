@@ -4,6 +4,7 @@ import type { ScrivenerBridgeSettingsHost } from '../../src/contrarius/scrivener
 import type { EstadoPacoteScrivener } from '../../src/contrarius/scrivener-alerts-panel-model';
 import type { ContextoManifestoScrivenerOperacional } from '../../src/contrarius/scrivener-package-manifest-factory';
 import type { FontePayloadContrariusScrivener } from '../../src/contrarius/scrivener-contrarius-payload-extractor';
+import { resumirExtracaoPayloadScrivener } from '../../src/contrarius/scrivener-payload-summary-model';
 
 function makeHost(pacotes?: EstadoPacoteScrivener[]): ScrivenerBridgeSettingsHost & { saveSettings: ReturnType<typeof vi.fn> } {
   return {
@@ -846,4 +847,154 @@ describe('ScrivenerBridgeService Obsidian write execution', () => {
 
         expect(saveCount).toBe(0);
     });
+});
+
+describe('ScrivenerBridgeService Contrarius payload summary', () => {
+  const CONTEXTO: ContextoManifestoScrivenerOperacional = {
+    tipo: 'exportacao',
+    origemVault: 'Contrarius Enantios',
+    diretorioPacotes: 'contrarius-scrivener-packages',
+    livro: 'Livro 1',
+    agora: new Date('2000-01-01T00:00:00.000Z'),
+  };
+
+  function makeVault(arquivos: Array<{ path: string; basename: string }>) {
+    return { getMarkdownFiles: () => arquivos };
+  }
+
+  function makeCache(frontmatters: Record<string, Record<string, unknown>>) {
+    return {
+      getFileCache: (arquivo: { path: string }) => {
+        const fm = frontmatters[arquivo.path];
+        return fm ? { frontmatter: fm } : null;
+      },
+    };
+  }
+
+  function criarAdapterMemoria(existentes: Record<string, string> = {}) {
+    const arquivos = new Map<string, string>(Object.entries(existentes));
+    const dirs = new Set<string>();
+    return {
+      arquivos,
+      adapter: {
+        async exists(c: string) { return arquivos.has(c) || dirs.has(c); },
+        async mkdir(c: string) { dirs.add(c); },
+        async write(c: string, v: string) { arquivos.set(c, v); },
+      },
+    };
+  }
+
+  it('resumirPayloadContrariusDoVault retorna contagem por tipo, livro e período', async () => {
+    const service = new ScrivenerBridgeService({ settings: {}, async saveSettings() {} });
+    const vault = makeVault([
+      { path: '02_Consciencias/C1.md', basename: 'C1' },
+      { path: '02_Consciencias/C2.md', basename: 'C2' },
+      { path: '05_Eventos/Ev1.md', basename: 'Ev1' },
+    ]);
+    const cache = makeCache({
+      '02_Consciencias/C1.md': { id: 'c1', titulo: 'C1', livro: 'Livro Alpha', periodo: 'Era 1' },
+      '02_Consciencias/C2.md': { id: 'c2', titulo: 'C2', livro: 'Livro Alpha', periodo: 'Era 2' },
+      '05_Eventos/Ev1.md': { id: 'ev1', titulo: 'Ev1', livro: 'Livro Beta', periodo: 'Era 1' },
+    });
+
+    const resumo = await service.resumirPayloadContrariusDoVault(vault, cache);
+
+    expect(resumo.totalItens).toBe(3);
+    expect(resumo.nivel).toBe('ok');
+    const tipoConsc = resumo.porTipo.find(c => c.chave === 'consciencia');
+    const tipoEvento = resumo.porTipo.find(c => c.chave === 'evento');
+    expect(tipoConsc?.total).toBe(2);
+    expect(tipoEvento?.total).toBe(1);
+    const livroAlpha = resumo.porLivro.find(c => c.chave === 'Livro Alpha');
+    const livroBeta = resumo.porLivro.find(c => c.chave === 'Livro Beta');
+    expect(livroAlpha?.total).toBe(2);
+    expect(livroBeta?.total).toBe(1);
+    const era1 = resumo.porPeriodo.find(c => c.chave === 'Era 1');
+    const era2 = resumo.porPeriodo.find(c => c.chave === 'Era 2');
+    expect(era1?.total).toBe(2);
+    expect(era2?.total).toBe(1);
+  });
+
+  it('extrairEResumirPayloadContrariusDoVault retorna extracao e resumo coerentes', async () => {
+    const service = new ScrivenerBridgeService({ settings: {}, async saveSettings() {} });
+    const vault = makeVault([
+      { path: '02_Consciencias/C1.md', basename: 'C1' },
+      { path: '05_Eventos/Ev1.md', basename: 'Ev1' },
+    ]);
+    const cache = makeCache({
+      '02_Consciencias/C1.md': { id: 'c1', titulo: 'Consciência 1' },
+      '05_Eventos/Ev1.md': { id: 'ev1', titulo: 'Evento 1' },
+    });
+
+    const { extracao, resumo } = await service.extrairEResumirPayloadContrariusDoVault(vault, cache);
+
+    expect(extracao.totalItens).toBe(2);
+    expect(resumo.totalItens).toBe(extracao.totalItens);
+    expect(resumo.totalDescartados).toBe(extracao.descartados);
+    expect(resumo.totalAvisos).toBe(extracao.avisos.length);
+    expect(resumo.nivel).toBe('ok');
+  });
+
+  it('executarEscritaPacoteOperacionalObsidianComPayloadDoVault retorna resumo junto da extração', async () => {
+    const service = new ScrivenerBridgeService({ settings: {}, async saveSettings() {} });
+    const vault = makeVault([
+      { path: '02_Consciencias/C1.md', basename: 'C1' },
+    ]);
+    const cache = makeCache({
+      '02_Consciencias/C1.md': { id: 'c1', titulo: 'Personagem C1' },
+    });
+    const memoria = criarAdapterMemoria();
+
+    const resultado = await service.executarEscritaPacoteOperacionalObsidianComPayloadDoVault(
+      CONTEXTO, vault, cache, memoria.adapter,
+    );
+
+    expect(resultado.resumo).toBeDefined();
+    expect(resultado.resumo.totalItens).toBe(resultado.extracao.totalItens);
+    expect(resultado.resumo.totalDescartados).toBe(resultado.extracao.descartados);
+    expect(resultado.resumo.totalAvisos).toBe(resultado.extracao.avisos.length);
+    expect(resultado.resumo.nivel).toBe('ok');
+  });
+
+  it('resumirPayloadContrariusDoVault não chama saveSettings', async () => {
+    let saveCount = 0;
+    const service = new ScrivenerBridgeService({ settings: {}, async saveSettings() { saveCount++; } });
+    const vault = makeVault([{ path: '02_Consciencias/C.md', basename: 'C' }]);
+    const cache = makeCache({ '02_Consciencias/C.md': { id: 'c1', titulo: 'C' } });
+
+    await service.resumirPayloadContrariusDoVault(vault, cache);
+
+    expect(saveCount).toBe(0);
+  });
+
+  it('extrairEResumirPayloadContrariusDoVault não chama saveSettings', async () => {
+    let saveCount = 0;
+    const service = new ScrivenerBridgeService({ settings: {}, async saveSettings() { saveCount++; } });
+    const vault = makeVault([{ path: '02_Consciencias/C.md', basename: 'C' }]);
+    const cache = makeCache({ '02_Consciencias/C.md': { id: 'c1', titulo: 'C' } });
+
+    await service.extrairEResumirPayloadContrariusDoVault(vault, cache);
+
+    expect(saveCount).toBe(0);
+  });
+
+  it('descartados e avisos aparecem no resumo quando a fonte contém entidades inválidas', () => {
+    const service = new ScrivenerBridgeService({ settings: {}, async saveSettings() {} });
+    const fonte: FontePayloadContrariusScrivener = {
+      consciencias: [
+        { id: 'c1', titulo: 'Válido' },
+        null as unknown as Record<string, unknown>,
+        { titulo: 'Sem id' },
+      ],
+    };
+    const extracao = service.extrairPayloadContrarius(fonte);
+    const resumo = resumirExtracaoPayloadScrivener(extracao);
+
+    expect(extracao.descartados).toBe(2);
+    expect(extracao.avisos.length).toBe(2);
+    expect(resumo.totalDescartados).toBe(2);
+    expect(resumo.totalAvisos).toBe(2);
+    expect(resumo.nivel).toBe('warning');
+    expect(resumo.primeirosAvisos.length).toBe(2);
+  });
 });

@@ -13,6 +13,7 @@ import type { TemplateEntityType } from './templates/TemplateTypes';
 import { gerarAlertasScrivener, type AlertaScrivener, type EstadoPainelScrivener } from './contrarius/scrivener-alerts-panel-model';
 import { ScrivenerBridgeService } from './contrarius/scrivener-bridge-service';
 import type { ResultadoPlanoEscritaPacoteScrivenerOperacional } from './contrarius/scrivener-bridge-service';
+import type { ResumoPayloadScrivener } from './contrarius/scrivener-payload-summary-model';
 import type { ContextoManifestoScrivenerOperacional } from './contrarius/scrivener-package-manifest-factory';
 import { resumirEstadoScrivener, type ResumoEstadoScrivener } from './contrarius/scrivener-state-summary-model';
 import { listarHistoricoPacotesScrivener, type ItemHistoricoPacoteScrivener } from './contrarius/scrivener-package-history-model';
@@ -48,6 +49,7 @@ export class StorytellerSuiteSettingTab extends PluginSettingTab {
     }
 
     private activeRenderToken = 0;
+    private ultimoResumoPayloadScrivener?: ResumoPayloadScrivener;
 
     display(): void {
         const token = ++this.activeRenderToken;
@@ -1256,6 +1258,7 @@ export class StorytellerSuiteSettingTab extends PluginSettingTab {
         this.renderScrivenerPackageHistory(container, historicoPacotes);
         this.renderScrivenerPackagePreview(container, previewPacote);
         this.renderScrivenerWritePlanPreview(container, planoEscrita);
+        this.renderScrivenerVaultPayloadPreview(container);
 
         new Setting(container)
             .setName('Controlled package write')
@@ -1272,6 +1275,7 @@ export class StorytellerSuiteSettingTab extends PluginSettingTab {
                         { sobrescrever: false },
                         { incluirTexto: false, incluirNotasSoltas: false },
                     );
+                    if (resultado.resumo) this.ultimoResumoPayloadScrivener = resultado.resumo;
                     if (resultado.execucao.operacoesErro === 0) {
                         new Notice(`Controlled Scrivener package written with ${resultado.extracao.totalItens} payload items.`);
                         await this.getScrivenerBridgeService().registrarManifestoOperacional(contexto);
@@ -1380,6 +1384,63 @@ export class StorytellerSuiteSettingTab extends PluginSettingTab {
     
 
 
+
+    private renderScrivenerVaultPayloadPreview(container: HTMLElement): void {
+        new Setting(container).setName('Vault payload preview').setHeading();
+
+        const resumo = this.ultimoResumoPayloadScrivener;
+        if (!resumo) {
+            new Setting(container).setDesc('Payload preview not loaded.');
+        } else {
+            new Setting(container).setDesc(resumo.descricao);
+            new Setting(container)
+                .setName('Items')
+                .setDesc(`Total: ${resumo.totalItens}; discarded: ${resumo.totalDescartados}; warnings: ${resumo.totalAvisos}.`);
+
+            if (resumo.porTipo.length > 0) {
+                new Setting(container)
+                    .setName('By type')
+                    .setDesc(resumo.porTipo.map(c => `${c.chave}: ${c.total}`).join(', '));
+            }
+            if (resumo.porLivro.length > 0) {
+                new Setting(container)
+                    .setName('By book')
+                    .setDesc(resumo.porLivro.map(c => `${c.chave}: ${c.total}`).join(', '));
+            }
+            if (resumo.porPeriodo.length > 0) {
+                new Setting(container)
+                    .setName('By period')
+                    .setDesc(resumo.porPeriodo.map(c => `${c.chave}: ${c.total}`).join(', '));
+            }
+            if (resumo.primeirosAvisos.length > 0) {
+                new Setting(container)
+                    .setName('First warnings')
+                    .setDesc(resumo.primeirosAvisos.join('; '));
+            }
+        }
+
+        new Setting(container)
+            .setName('Preview vault payload')
+            .setDesc('Inspect Contrarius payload extracted from the vault without writing any package.')
+            .addButton(button => button
+                .setButtonText('Preview vault payload')
+                .onClick(async () => {
+                    button.setDisabled(true);
+                    try {
+                        this.ultimoResumoPayloadScrivener = await this.getScrivenerBridgeService().resumirPayloadContrariusDoVault(
+                            this.app.vault,
+                            this.app.metadataCache,
+                            { incluirTexto: false, incluirNotasSoltas: false },
+                        );
+                        const r = this.ultimoResumoPayloadScrivener;
+                        new Notice(`Scrivener payload preview: ${r.totalItens} items, ${r.totalDescartados} discarded, ${r.totalAvisos} warnings.`);
+                    } finally {
+                        button.setDisabled(false);
+                    }
+                    container.empty();
+                    this.renderScrivenerTab(container);
+                }));
+    }
 
     private renderScrivenerWritePlanPreview(container: HTMLElement, planoEscrita: ResultadoPlanoEscritaPacoteScrivenerOperacional): void {
         const escrita = planoEscrita.escrita;
