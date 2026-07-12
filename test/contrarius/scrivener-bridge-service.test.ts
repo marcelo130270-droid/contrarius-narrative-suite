@@ -563,7 +563,7 @@ describe('ScrivenerBridgeService Contrarius payload extraction', () => {
     };
     const resultado = service.criarPlanoEscritaPacoteOperacionalComPayloadContrarius(CONTEXTO, fonte);
     expect(resultado.preview.manifesto.id).toBe('exportacao-livro-1-2000-01-01t00-00-00-000z');
-    expect(resultado.escrita.totalOperacoes).toBe(3);
+    expect(resultado.escrita.totalOperacoes).toBe(4);
 
     const payloadOp = resultado.escrita.operacoes.find(o => o.caminhoRelativo === 'payload/index.json');
     expect(payloadOp).toBeDefined();
@@ -704,8 +704,8 @@ describe('ScrivenerBridgeService Contrarius vault payload source', () => {
       CONTEXTO, vault, cache, memoria.adapter,
     );
 
-    expect(resultado.execucao.totalOperacoes).toBe(3);
-    expect(resultado.execucao.operacoesOk).toBe(3);
+    expect(resultado.execucao.totalOperacoes).toBe(4);
+    expect(resultado.execucao.operacoesOk).toBe(4);
     expect(resultado.execucao.operacoesErro).toBe(0);
     expect(resultado.extracao.totalItens).toBe(1);
   });

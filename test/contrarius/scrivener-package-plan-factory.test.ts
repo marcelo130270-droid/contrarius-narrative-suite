@@ -97,7 +97,48 @@ describe('scrivener-package-plan-factory', () => {
         expect(parsed.itens.map((i: { id: string }) => i.id)).toEqual(['a', 'b', 'c']);
     });
 
-    it('itens inválidos em itensPayload são descartados', () => {
+    it('contexto com itensPayload gera arquivos payload-item no plano', () => {
+        const resultado = criarPlanoPacoteOperacionalScrivener({
+            tipo: 'exportacao',
+            origemVault: 'Vault',
+            diretorioPacotes: 'pacotes',
+            livro: 'Livro 1',
+            agora: '2000-01-01T00:00:00.000Z',
+            itensPayload: [
+                { id: 'a', tipo: 'evento', titulo: 'Alpha', ordemNarrativa: 1 },
+                { id: 'b', tipo: 'lugar', titulo: 'Beta', ordemNarrativa: 2 },
+            ],
+        });
+
+        const itemArquivos = resultado.plano.arquivos.filter(a => a.tipo === 'payload-item');
+        expect(itemArquivos).toHaveLength(2);
+        expect(resultado.plano.totalArquivos).toBe(5);
+    });
+
+    it('payload/index.json e arquivos payload-item sao coerentes', () => {
+        const resultado = criarPlanoPacoteOperacionalScrivener({
+            tipo: 'exportacao',
+            origemVault: 'Vault',
+            diretorioPacotes: 'pacotes',
+            livro: 'Livro 1',
+            agora: '2000-01-01T00:00:00.000Z',
+            itensPayload: [
+                { id: 'x', tipo: 'consciencia', titulo: 'Rogier' },
+                { id: 'y', tipo: 'consciencia', titulo: 'Miriam' },
+            ],
+        });
+
+        const payloadIndex = resultado.plano.arquivos.find(a => a.caminhoRelativo === 'payload/index.json');
+        const parsed = JSON.parse(payloadIndex?.conteudo ?? '{}');
+        const itemArquivos = resultado.plano.arquivos.filter(a => a.tipo === 'payload-item');
+
+        expect(parsed.totalItens).toBe(2);
+        expect(itemArquivos).toHaveLength(2);
+        expect(itemArquivos.map(a => a.caminhoRelativo)).toContain('payload/items/consciencia/rogier.md');
+        expect(itemArquivos.map(a => a.caminhoRelativo)).toContain('payload/items/consciencia/miriam.md');
+    });
+
+    it('itens invalidos em itensPayload sao descartados', () => {
         const resultado = criarPlanoPacoteOperacionalScrivener({
             tipo: 'exportacao',
             origemVault: 'Vault',
@@ -117,7 +158,7 @@ describe('scrivener-package-plan-factory', () => {
         expect(parsed.itens[0].id).toBe('valido');
     });
 
-    it('ordenação do payload é preservada quando itens não têm ordemNarrativa', () => {
+    it('ordenacao do payload e preservada quando itens nao tem ordemNarrativa', () => {
         const resultado = criarPlanoPacoteOperacionalScrivener({
             tipo: 'restauracao',
             origemVault: 'Vault',

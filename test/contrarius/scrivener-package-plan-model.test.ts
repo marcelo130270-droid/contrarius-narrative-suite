@@ -85,7 +85,12 @@ describe('scrivener-package-plan-model', () => {
         expect(manifestJson?.conteudo).not.toContain('contrarius-scrivener-payload');
     });
 
-    it('totalArquivos remains 3 regardless of payload', () => {
+    it('payload vazio mantem 3 arquivos', () => {
+        const plano = criarPlanoPacoteScrivener(criarManifestoBase());
+        expect(plano.totalArquivos).toBe(3);
+    });
+
+    it('payload com 2 itens gera 5 arquivos', () => {
         const manifesto = criarManifestoBase();
         const payload = criarPayloadScrivener({
             manifestoId: manifesto.id,
@@ -95,12 +100,56 @@ describe('scrivener-package-plan-model', () => {
                 { id: 'b', tipo: 'lugar', titulo: 'B' },
             ],
         });
+        const plano = criarPlanoPacoteScrivener(manifesto, { payload });
+        expect(plano.totalArquivos).toBe(5);
+    });
 
-        const planoSemPayload = criarPlanoPacoteScrivener(manifesto);
-        const planoComPayload = criarPlanoPacoteScrivener(manifesto, { payload });
+    it('arquivos payload-item tem caminhos esperados', () => {
+        const manifesto = criarManifestoBase();
+        const payload = criarPayloadScrivener({
+            manifestoId: manifesto.id,
+            geradoEm: manifesto.criadoEm,
+            itens: [
+                { id: 'a', tipo: 'evento', titulo: 'Alpha' },
+                { id: 'b', tipo: 'lugar', titulo: 'Beta' },
+            ],
+        });
+        const plano = criarPlanoPacoteScrivener(manifesto, { payload });
+        const itemArquivos = plano.arquivos.filter(a => a.tipo === 'payload-item');
 
-        expect(planoSemPayload.totalArquivos).toBe(3);
-        expect(planoComPayload.totalArquivos).toBe(3);
+        expect(itemArquivos).toHaveLength(2);
+        expect(itemArquivos.map(a => a.caminhoRelativo)).toContain('payload/items/evento/alpha.md');
+        expect(itemArquivos.map(a => a.caminhoRelativo)).toContain('payload/items/lugar/beta.md');
+    });
+
+    it('totalArquivos e tamanhoTotalCaracteres incluem arquivos payload-item', () => {
+        const manifesto = criarManifestoBase();
+        const payload = criarPayloadScrivener({
+            manifestoId: manifesto.id,
+            geradoEm: manifesto.criadoEm,
+            itens: [{ id: 'x', tipo: 'nota', titulo: 'Nota X' }],
+        });
+        const plano = criarPlanoPacoteScrivener(manifesto, { payload });
+
+        expect(plano.totalArquivos).toBe(4);
+        expect(plano.tamanhoTotalCaracteres).toBe(
+            plano.arquivos.reduce((total, arquivo) => total + arquivo.tamanhoCaracteres, 0),
+        );
+    });
+
+    it('payload/index.json continua existindo com itens', () => {
+        const manifesto = criarManifestoBase();
+        const payload = criarPayloadScrivener({
+            manifestoId: manifesto.id,
+            geradoEm: manifesto.criadoEm,
+            itens: [{ id: 'a', tipo: 'consciencia', titulo: 'Rogier' }],
+        });
+        const plano = criarPlanoPacoteScrivener(manifesto, { payload });
+        const payloadIndex = plano.arquivos.find(a => a.caminhoRelativo === 'payload/index.json');
+
+        expect(payloadIndex).toBeDefined();
+        expect(payloadIndex?.tipo).toBe('payload');
+        expect(payloadIndex?.conteudo).toContain('"totalItens": 1');
     });
 
     it('creates a readable readme preview', () => {
@@ -110,6 +159,23 @@ describe('scrivener-package-plan-model', () => {
         expect(readme?.tipo).toBe('readme');
         expect(readme?.conteudo).toContain('Contrarius Scrivener Package Preview');
         expect(readme?.conteudo).toContain('Este plano ainda nao grava arquivos reais do Scrivener.');
+    });
+
+    it('readme menciona quantidade de itens quando payload tem itens', () => {
+        const manifesto = criarManifestoBase();
+        const payload = criarPayloadScrivener({
+            manifestoId: manifesto.id,
+            geradoEm: manifesto.criadoEm,
+            itens: [
+                { id: 'a', tipo: 'evento', titulo: 'A' },
+                { id: 'b', tipo: 'lugar', titulo: 'B' },
+            ],
+        });
+        const plano = criarPlanoPacoteScrivener(manifesto, { payload });
+        const readme = plano.arquivos.find(a => a.caminhoRelativo === 'README.md');
+
+        expect(readme?.conteudo).toContain('Itens de payload: 2');
+        expect(readme?.conteudo).toContain('Arquivos de item: 2');
     });
 
     it('computes file sizes and total size', () => {

@@ -1,8 +1,9 @@
 import type { ManifestoScrivener } from './scrivener-package-manifest';
 import type { PayloadScrivener } from './scrivener-package-payload-model';
 import { criarPayloadScrivener } from './scrivener-package-payload-model';
+import { criarArquivosMarkdownPayloadScrivener } from './scrivener-payload-markdown-file-model';
 
-export type TipoArquivoPlanoScrivener = 'manifest' | 'payload' | 'readme';
+export type TipoArquivoPlanoScrivener = 'manifest' | 'payload' | 'readme' | 'payload-item';
 
 export interface ArquivoPlanoPacoteScrivener {
     caminhoRelativo: string;
@@ -53,8 +54,8 @@ function gerarPayloadIndexJson(payload: PayloadScrivener): string {
     return JSON.stringify(payload, null, 2);
 }
 
-function criarReadme(manifesto: ManifestoScrivener): string {
-    return [
+function criarReadme(manifesto: ManifestoScrivener, totalItens: number, totalArquivosItem: number): string {
+    const linhas = [
         '# Contrarius Scrivener Package Preview',
         '',
         `Manifesto: ${manifesto.id}`,
@@ -63,10 +64,19 @@ function criarReadme(manifesto: ManifestoScrivener): string {
         `Vault de origem: ${manifesto.origemVault}`,
         `Livro: ${manifesto.livro ?? 'sem livro'}`,
         '',
-        'Este plano ainda nao grava arquivos reais do Scrivener.',
-        'Ele descreve a estrutura prevista para um pacote operacional Contrarius/Scrivener.',
-        '',
-    ].join('\n');
+    ];
+
+    if (totalItens > 0) {
+        linhas.push(`Itens de payload: ${totalItens}`);
+        linhas.push(`Arquivos de item: ${totalArquivosItem}`);
+        linhas.push('');
+    }
+
+    linhas.push('Este plano ainda nao grava arquivos reais do Scrivener.');
+    linhas.push('Ele descreve a estrutura prevista para um pacote operacional Contrarius/Scrivener.');
+    linhas.push('');
+
+    return linhas.join('\n');
 }
 
 export function criarPlanoPacoteScrivener(
@@ -78,10 +88,15 @@ export function criarPlanoPacoteScrivener(
         geradoEm: manifesto.criadoEm,
     });
 
+    const arquivosItem = criarArquivosMarkdownPayloadScrivener(payload).map(
+        arquivo => criarArquivoPlanoScrivener(arquivo.caminhoRelativo, 'payload-item', arquivo.conteudo),
+    );
+
     const arquivos = [
         criarArquivoPlanoScrivener('manifest.json', 'manifest', criarManifestJson(manifesto)),
         criarArquivoPlanoScrivener('payload/index.json', 'payload', gerarPayloadIndexJson(payload)),
-        criarArquivoPlanoScrivener('README.md', 'readme', criarReadme(manifesto)),
+        criarArquivoPlanoScrivener('README.md', 'readme', criarReadme(manifesto, payload.totalItens, arquivosItem.length)),
+        ...arquivosItem,
     ];
 
     return {
