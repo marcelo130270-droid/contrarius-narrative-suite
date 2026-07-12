@@ -1264,16 +1264,21 @@ export class StorytellerSuiteSettingTab extends PluginSettingTab {
                 .setButtonText('Write controlled package')
                 .onClick(async () => {
                     const contexto = this.getOperationalScrivenerManifestContext();
-                    const resultado = await this.getScrivenerBridgeService().executarEscritaPacoteOperacionalObsidian(
+                    const resultado = await this.getScrivenerBridgeService().executarEscritaPacoteOperacionalObsidianComPayloadDoVault(
                         contexto,
+                        this.app.vault,
+                        this.app.metadataCache,
                         this.app.vault.adapter,
                         { sobrescrever: false },
+                        { incluirTexto: false, incluirNotasSoltas: false },
                     );
                     if (resultado.execucao.operacoesErro === 0) {
-                        new Notice('Controlled Scrivener package written.');
+                        new Notice(`Controlled Scrivener package written with ${resultado.extracao.totalItens} payload items.`);
                         await this.getScrivenerBridgeService().registrarManifestoOperacional(contexto);
                     } else {
-                        new Notice('Controlled Scrivener package write completed with errors.');
+                        const descartados = resultado.extracao.descartados > 0 ? ` Discarded: ${resultado.extracao.descartados}.` : '';
+                        const avisos = resultado.extracao.avisos.length > 0 ? ` Warnings: ${resultado.extracao.avisos.length}.` : '';
+                        new Notice(`Controlled Scrivener package write completed with errors. Errors: ${resultado.execucao.operacoesErro}.${descartados}${avisos}`);
                     }
                     container.empty();
                     this.renderScrivenerTab(container);

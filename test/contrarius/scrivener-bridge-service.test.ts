@@ -601,6 +601,169 @@ describe('ScrivenerBridgeService Contrarius payload extraction', () => {
   });
 });
 
+describe('ScrivenerBridgeService Contrarius vault payload source', () => {
+  const CONTEXTO: ContextoManifestoScrivenerOperacional = {
+    tipo: 'exportacao',
+    origemVault: 'Contrarius Enantios',
+    diretorioPacotes: 'contrarius-scrivener-packages',
+    livro: 'Livro 1',
+    agora: new Date('2000-01-01T00:00:00.000Z'),
+  };
+
+  function makeVault(arquivos: Array<{ path: string; basename: string }>, conteudos?: Record<string, string>) {
+    return {
+      getMarkdownFiles: () => arquivos,
+      cachedRead: conteudos ? async (a: { path: string }) => conteudos[a.path] ?? '' : undefined,
+    };
+  }
+
+  function makeCache(frontmatters: Record<string, Record<string, unknown>>) {
+    return {
+      getFileCache: (arquivo: { path: string }) => {
+        const fm = frontmatters[arquivo.path];
+        return fm ? { frontmatter: fm } : null;
+      },
+    };
+  }
+
+  function criarAdapterMemoria(existentes: Record<string, string> = {}) {
+    const arquivos = new Map<string, string>(Object.entries(existentes));
+    const dirs = new Set<string>();
+    return {
+      arquivos,
+      adapter: {
+        async exists(c: string) { return arquivos.has(c) || dirs.has(c); },
+        async mkdir(c: string) { dirs.add(c); },
+        async write(c: string, v: string) { arquivos.set(c, v); },
+      },
+    };
+  }
+
+  it('extrairPayloadContrariusDoVault extrai itens a partir de vault/metadataCache em memória', async () => {
+    const service = new ScrivenerBridgeService({ settings: {}, async saveSettings() {} });
+    const vault = makeVault([
+      { path: '02_Consciencias/Personagem.md', basename: 'Personagem' },
+      { path: '05_Eventos/Batalha.md', basename: 'Batalha' },
+    ]);
+    const cache = makeCache({
+      '02_Consciencias/Personagem.md': { id: 'p1', titulo: 'Personagem A' },
+      '05_Eventos/Batalha.md': { id: 'ev1', titulo: 'Grande Batalha' },
+    });
+
+    const resultado = await service.extrairPayloadContrariusDoVault(vault, cache);
+
+    expect(resultado.totalItens).toBe(2);
+    expect(resultado.descartados).toBe(0);
+    const tipos = resultado.itens.map(i => i.tipo);
+    expect(tipos).toContain('consciencia');
+    expect(tipos).toContain('evento');
+  });
+
+  it('retorna extracao com totalItens e avisos', async () => {
+    const service = new ScrivenerBridgeService({ settings: {}, async saveSettings() {} });
+    const vault = makeVault([
+      { path: '02_Consciencias/P1.md', basename: 'P1' },
+      { path: '02_Consciencias/P2.md', basename: 'P2' },
+    ]);
+    const cache = makeCache({
+      '02_Consciencias/P1.md': { id: 'c1', titulo: 'Consciência 1' },
+      '02_Consciencias/P2.md': { id: 'c2', titulo: 'Consciência 2' },
+    });
+
+    const resultado = await service.extrairPayloadContrariusDoVault(vault, cache);
+
+    expect(resultado.totalItens).toBe(2);
+    expect(resultado.avisos).toBeDefined();
+    expect(typeof resultado.descartados).toBe('number');
+  });
+
+  it('extrairPayloadContrariusDoVault não chama saveSettings', async () => {
+    let saveCount = 0;
+    const service = new ScrivenerBridgeService({ settings: {}, async saveSettings() { saveCount++; } });
+    const vault = makeVault([{ path: '02_Consciencias/P.md', basename: 'P' }]);
+    const cache = makeCache({ '02_Consciencias/P.md': { id: 'c1', titulo: 'C1' } });
+
+    await service.extrairPayloadContrariusDoVault(vault, cache);
+
+    expect(saveCount).toBe(0);
+  });
+
+  it('executarEscritaPacoteOperacionalObsidianComPayloadDoVault escreve pacote com payload vindo do vault', async () => {
+    const service = new ScrivenerBridgeService({ settings: {}, async saveSettings() {} });
+    const vault = makeVault([
+      { path: '02_Consciencias/Personagem.md', basename: 'Personagem' },
+    ]);
+    const cache = makeCache({
+      '02_Consciencias/Personagem.md': { id: 'c1', titulo: 'Personagem Chave' },
+    });
+    const memoria = criarAdapterMemoria();
+
+    const resultado = await service.executarEscritaPacoteOperacionalObsidianComPayloadDoVault(
+      CONTEXTO, vault, cache, memoria.adapter,
+    );
+
+    expect(resultado.execucao.totalOperacoes).toBe(3);
+    expect(resultado.execucao.operacoesOk).toBe(3);
+    expect(resultado.execucao.operacoesErro).toBe(0);
+    expect(resultado.extracao.totalItens).toBe(1);
+  });
+
+  it('payload/index.json contém itens extraídos do vault', async () => {
+    const service = new ScrivenerBridgeService({ settings: {}, async saveSettings() {} });
+    const vault = makeVault([
+      { path: '02_Consciencias/C1.md', basename: 'C1' },
+      { path: '05_Eventos/Ev1.md', basename: 'Ev1' },
+    ]);
+    const cache = makeCache({
+      '02_Consciencias/C1.md': { id: 'c1', titulo: 'Consciência Um' },
+      '05_Eventos/Ev1.md': { id: 'ev1', titulo: 'Evento Um' },
+    });
+    const memoria = criarAdapterMemoria();
+
+    await service.executarEscritaPacoteOperacionalObsidianComPayloadDoVault(
+      CONTEXTO, vault, cache, memoria.adapter,
+    );
+
+    const payloadPath = 'contrarius-scrivener-packages/exportacao-livro-1-2000-01-01t00-00-00-000z.scrivener-package/payload/index.json';
+    const conteudo = memoria.arquivos.get(payloadPath);
+    expect(conteudo).toBeDefined();
+    const payload = JSON.parse(conteudo!);
+    expect(payload.totalItens).toBe(2);
+    const ids = payload.itens.map((i: { id: string }) => i.id);
+    expect(ids).toContain('c1');
+    expect(ids).toContain('ev1');
+  });
+
+  it('não chama saveSettings durante execução com vault', async () => {
+    let saveCount = 0;
+    const service = new ScrivenerBridgeService({ settings: {}, async saveSettings() { saveCount++; } });
+    const vault = makeVault([{ path: '02_Consciencias/P.md', basename: 'P' }]);
+    const cache = makeCache({ '02_Consciencias/P.md': { id: 'c1', titulo: 'C' } });
+    const memoria = criarAdapterMemoria();
+
+    await service.executarEscritaPacoteOperacionalObsidianComPayloadDoVault(
+      CONTEXTO, vault, cache, memoria.adapter,
+    );
+
+    expect(saveCount).toBe(0);
+  });
+
+  it('não sobrescreve arquivos existentes por padrão', async () => {
+    const service = new ScrivenerBridgeService({ settings: {}, async saveSettings() {} });
+    const vault = makeVault([{ path: '02_Consciencias/P.md', basename: 'P' }]);
+    const cache = makeCache({ '02_Consciencias/P.md': { id: 'c1', titulo: 'C' } });
+    const manifestoCaminho = 'contrarius-scrivener-packages/exportacao-livro-1-2000-01-01t00-00-00-000z.scrivener-package/manifest.json';
+    const memoria = criarAdapterMemoria({ [manifestoCaminho]: 'old' });
+
+    const resultado = await service.executarEscritaPacoteOperacionalObsidianComPayloadDoVault(
+      CONTEXTO, vault, cache, memoria.adapter,
+    );
+
+    expect(resultado.execucao.operacoesErro).toBeGreaterThan(0);
+    expect(memoria.arquivos.get(manifestoCaminho)).toBe('old');
+  });
+});
+
 describe('ScrivenerBridgeService Obsidian write execution', () => {
     function criarAdapterMemoria(arquivosExistentes: Record<string, string> = {}) {
         const arquivos = new Map<string, string>(Object.entries(arquivosExistentes));

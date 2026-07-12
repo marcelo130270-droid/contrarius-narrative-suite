@@ -21,6 +21,14 @@ import { criarGravadorPacoteScrivenerObsidian } from './scrivener-obsidian-write
 import type { DataAdapterEscritaScrivenerLike } from './scrivener-obsidian-write-adapter';
 import type { FontePayloadContrariusScrivener, ResultadoExtracaoPayloadContrariusScrivener } from './scrivener-contrarius-payload-extractor';
 import { extrairItensPayloadContrariusScrivener } from './scrivener-contrarius-payload-extractor';
+import type {
+  ArquivoMarkdownContrariusPayloadLike,
+  MetadataCacheContrariusPayloadLike,
+  VaultContrariusPayloadLike,
+  OpcoesFonteVaultContrariusPayload,
+} from './scrivener-contrarius-vault-payload-source';
+import { criarFontePayloadContrariusScrivenerDoVault } from './scrivener-contrarius-vault-payload-source';
+import type { ContextoPlanoPacoteScrivenerOperacional } from './scrivener-package-plan-factory';
 
 export interface ScrivenerBridgeSettingsHost {
   settings: {
@@ -135,6 +143,30 @@ export class ScrivenerBridgeService {
         fonte: FontePayloadContrariusScrivener,
     ): ResultadoExtracaoPayloadContrariusScrivener {
         return extrairItensPayloadContrariusScrivener(fonte);
+    }
+
+    async extrairPayloadContrariusDoVault<TArquivo extends ArquivoMarkdownContrariusPayloadLike>(
+        vault: VaultContrariusPayloadLike<TArquivo>,
+        metadataCache: MetadataCacheContrariusPayloadLike<TArquivo>,
+        opcoes?: OpcoesFonteVaultContrariusPayload,
+    ): Promise<ResultadoExtracaoPayloadContrariusScrivener> {
+        const fonte = await criarFontePayloadContrariusScrivenerDoVault(vault, metadataCache, opcoes);
+        return this.extrairPayloadContrarius(fonte);
+    }
+
+    async executarEscritaPacoteOperacionalObsidianComPayloadDoVault<TArquivo extends ArquivoMarkdownContrariusPayloadLike>(
+        contexto: ContextoManifestoScrivenerOperacional,
+        vault: VaultContrariusPayloadLike<TArquivo>,
+        metadataCache: MetadataCacheContrariusPayloadLike<TArquivo>,
+        adapter: DataAdapterEscritaScrivenerLike,
+        options: AdaptadorControladoEscritaScrivenerOptions = {},
+        opcoesFonte: OpcoesFonteVaultContrariusPayload = {},
+    ): Promise<ResultadoExecucaoPacoteScrivenerOperacional & { extracao: ResultadoExtracaoPayloadContrariusScrivener }> {
+        const fonte = await criarFontePayloadContrariusScrivenerDoVault(vault, metadataCache, opcoesFonte);
+        const extracao = this.extrairPayloadContrarius(fonte);
+        const contextoComPayload: ContextoPlanoPacoteScrivenerOperacional = { ...contexto, itensPayload: extracao.itens };
+        const execucao = await this.executarEscritaPacoteOperacionalObsidian(contextoComPayload, adapter, options);
+        return { ...execucao, extracao };
     }
 
     criarPreviewPacoteOperacionalComPayloadContrarius(
