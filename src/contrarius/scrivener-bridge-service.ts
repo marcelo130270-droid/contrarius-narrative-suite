@@ -34,6 +34,8 @@ import type { ResumoPayloadScrivener } from './scrivener-payload-summary-model';
 import { resumirExtracaoPayloadScrivener } from './scrivener-payload-summary-model';
 import type { FiltrosPayloadScrivener, ResultadoFiltroPayloadScrivener } from './scrivener-payload-filter-model';
 import { filtrarItensPayloadScrivener } from './scrivener-payload-filter-model';
+import type { ResultadoIntegridadePacoteScrivener } from './scrivener-package-integrity-model';
+import { validarIntegridadePlanoPacoteScrivener } from './scrivener-package-integrity-model';
 
 export interface ScrivenerBridgeSettingsHost {
   settings: {
@@ -238,6 +240,41 @@ export class ScrivenerBridgeService {
         };
         const resumo = resumirExtracaoPayloadScrivener(extracaoFiltrada);
         return { extracao, filtro, resumo };
+    }
+
+    validarIntegridadePreviewPacoteOperacional(
+        contexto: ContextoManifestoScrivenerOperacional,
+    ): ResultadoIntegridadePacoteScrivener {
+        const preview = this.criarPreviewPacoteOperacional(contexto);
+        return validarIntegridadePlanoPacoteScrivener(preview.plano);
+    }
+
+    validarIntegridadePlanoEscritaPacoteOperacional(
+        contexto: ContextoManifestoScrivenerOperacional,
+    ): ResultadoIntegridadePacoteScrivener {
+        const planoEscrita = this.criarPlanoEscritaPacoteOperacional(contexto);
+        return validarIntegridadePlanoPacoteScrivener(planoEscrita.preview.plano);
+    }
+
+    async validarIntegridadePayloadContrariusDoVault<TArquivo extends ArquivoMarkdownContrariusPayloadLike>(
+        contexto: ContextoManifestoScrivenerOperacional,
+        vault: VaultContrariusPayloadLike<TArquivo>,
+        metadataCache: MetadataCacheContrariusPayloadLike<TArquivo>,
+        filtros?: FiltrosPayloadScrivener,
+        opcoes?: OpcoesFonteVaultContrariusPayload,
+    ): Promise<{
+        extracao: ResultadoExtracaoPayloadContrariusScrivener;
+        filtro: ResultadoFiltroPayloadScrivener;
+        resumo: ResumoPayloadScrivener;
+        integridade: ResultadoIntegridadePacoteScrivener;
+    }> {
+        const { extracao, filtro, resumo } = await this.extrairFiltrarEResumirPayloadContrariusDoVault(
+            vault, metadataCache, filtros, opcoes,
+        );
+        const contextoComPayload: ContextoPlanoPacoteScrivenerOperacional = { ...contexto, itensPayload: filtro.itens };
+        const preview = this.criarPreviewPacoteOperacional(contextoComPayload);
+        const integridade = validarIntegridadePlanoPacoteScrivener(preview.plano);
+        return { extracao, filtro, resumo, integridade };
     }
 
     async executarEscritaPacoteOperacionalObsidianComPayloadDoVaultFiltrado<TArquivo extends ArquivoMarkdownContrariusPayloadLike>(

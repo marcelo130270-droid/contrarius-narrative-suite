@@ -13,6 +13,7 @@ import type { TemplateEntityType } from './templates/TemplateTypes';
 import { gerarAlertasScrivener, type AlertaScrivener, type EstadoPainelScrivener } from './contrarius/scrivener-alerts-panel-model';
 import { ScrivenerBridgeService } from './contrarius/scrivener-bridge-service';
 import type { ResultadoPlanoEscritaPacoteScrivenerOperacional } from './contrarius/scrivener-bridge-service';
+import type { ResultadoIntegridadePacoteScrivener } from './contrarius/scrivener-package-integrity-model';
 import type { ResumoPayloadScrivener } from './contrarius/scrivener-payload-summary-model';
 import type { FiltrosPayloadScrivener } from './contrarius/scrivener-payload-filter-model';
 import {
@@ -57,6 +58,7 @@ export class StorytellerSuiteSettingTab extends PluginSettingTab {
 
     private activeRenderToken = 0;
     private ultimoResumoPayloadScrivener?: ResumoPayloadScrivener;
+    private ultimaIntegridadePacoteScrivener?: ResultadoIntegridadePacoteScrivener;
     private filtroPayloadLivroScrivener = '';
     private filtroPayloadPeriodoScrivener = '';
     private filtroPayloadTextoScrivener = '';
@@ -1271,6 +1273,7 @@ export class StorytellerSuiteSettingTab extends PluginSettingTab {
         this.renderScrivenerPackagePreview(container, previewPacote);
         this.renderScrivenerWritePlanPreview(container, planoEscrita);
         this.renderScrivenerVaultPayloadPreview(container);
+        this.renderScrivenerPackageIntegrity(container);
 
         new Setting(container)
             .setName('Controlled package write')
@@ -1279,7 +1282,22 @@ export class StorytellerSuiteSettingTab extends PluginSettingTab {
                 .setButtonText('Write controlled package')
                 .onClick(async () => {
                     const contexto = this.getOperationalScrivenerManifestContext();
-                    const resultado = await this.getScrivenerBridgeService().executarEscritaPacoteOperacionalObsidianComPayloadDoVaultFiltrado(
+                    const bridge = this.getScrivenerBridgeService();
+                    const integridadeCheck = await bridge.validarIntegridadePayloadContrariusDoVault(
+                        contexto,
+                        this.app.vault,
+                        this.app.metadataCache,
+                        this.getFiltrosPayloadScrivener(),
+                        { incluirTexto: false, incluirNotasSoltas: false },
+                    );
+                    this.ultimaIntegridadePacoteScrivener = integridadeCheck.integridade;
+                    if (integridadeCheck.integridade.nivel === 'error') {
+                        new Notice('Scrivener package write blocked by integrity errors.');
+                        container.empty();
+                        this.renderScrivenerTab(container);
+                        return;
+                    }
+                    const resultado = await bridge.executarEscritaPacoteOperacionalObsidianComPayloadDoVaultFiltrado(
                         contexto,
                         this.app.vault,
                         this.app.metadataCache,
@@ -1291,7 +1309,7 @@ export class StorytellerSuiteSettingTab extends PluginSettingTab {
                     if (resultado.resumo) this.ultimoResumoPayloadScrivener = resultado.resumo;
                     if (resultado.execucao.operacoesErro === 0) {
                         new Notice(`Controlled Scrivener package written with ${resultado.filtro.totalFiltrado}/${resultado.filtro.totalOriginal} payload items after filters.`);
-                        await this.getScrivenerBridgeService().registrarManifestoOperacional(contexto);
+                        await bridge.registrarManifestoOperacional(contexto);
                     } else {
                         const descartados = resultado.extracao.descartados > 0 ? ` Discarded: ${resultado.extracao.descartados}.` : '';
                         const avisos = resultado.extracao.avisos.length > 0 ? ` Warnings: ${resultado.extracao.avisos.length}.` : '';
@@ -1548,6 +1566,54 @@ export class StorytellerSuiteSettingTab extends PluginSettingTab {
                         new Notice(`Scrivener payload preview: ${resultado.filtro.totalFiltrado}/${resultado.filtro.totalOriginal} items after filters.`);
                     } finally {
                         button.setDisabled(false);
+                    }
+                    container.empty();
+                    this.renderScrivenerTab(container);
+                }));
+    }
+
+    private renderScrivenerPackageIntegrity(container: HTMLElement): void {
+        new Setting(container).setName('Package integrity').setHeading();
+
+        const integridade = this.ultimaIntegridadePacoteScrivener;
+
+        if (!integridade) {
+            new Setting(container).setDesc('Package integrity not checked.');
+        } else {
+            new Setting(container)
+                .setName('Integrity result')
+                .setDesc(
+                    `Level: ${integridade.nivel}; valid: ${integridade.valido}; errors: ${integridade.erros}; warnings: ${integridade.avisos}; total files: ${integridade.totalArquivos}; payload items: ${integridade.totalItensPayload}; item files: ${integridade.totalArquivosItens}.`,
+                );
+
+            if (integridade.achados.length > 0) {
+                const primeiros = integridade.achados.slice(0, 5);
+                new Setting(container)
+                    .setName('Findings')
+                    .setDesc(primeiros.map(a => `[${a.nivel}] ${a.codigo}: ${a.mensagem}`).join(' | '));
+            }
+        }
+
+        new Setting(container)
+            .setName('Check package integrity')
+            .setDesc('Validate the operational package plan against the current vault payload.')
+            .addButton(button => button
+                .setButtonText('Check package integrity')
+                .onClick(async () => {
+                    const contexto = this.getOperationalScrivenerManifestContext();
+                    const resultado = await this.getScrivenerBridgeService().validarIntegridadePayloadContrariusDoVault(
+                        contexto,
+                        this.app.vault,
+                        this.app.metadataCache,
+                        this.getFiltrosPayloadScrivener(),
+                        { incluirTexto: false, incluirNotasSoltas: false },
+                    );
+                    this.ultimoResumoPayloadScrivener = resultado.resumo;
+                    this.ultimaIntegridadePacoteScrivener = resultado.integridade;
+                    if (resultado.integridade.nivel === 'ok') {
+                        new Notice('Scrivener package integrity: OK.');
+                    } else {
+                        new Notice(`Scrivener package integrity: ${resultado.integridade.erros} errors, ${resultado.integridade.avisos} warnings.`);
                     }
                     container.empty();
                     this.renderScrivenerTab(container);

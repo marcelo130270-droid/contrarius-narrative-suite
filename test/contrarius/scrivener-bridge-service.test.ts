@@ -1240,3 +1240,99 @@ describe('ScrivenerBridgeService payload filters', () => {
     expect(resultado.filtro.totalRemovido).toBe(0);
   });
 });
+
+describe('ScrivenerBridgeService package integrity', () => {
+  const CONTEXTO: ContextoManifestoScrivenerOperacional = {
+    tipo: 'exportacao',
+    origemVault: 'Contrarius Enantios',
+    diretorioPacotes: 'contrarius-scrivener-packages',
+    livro: 'Livro 1',
+    agora: new Date('2000-01-01T00:00:00.000Z'),
+  };
+
+  function makeService() {
+    return new ScrivenerBridgeService({ settings: {}, async saveSettings() {} });
+  }
+
+  function makeVault(arquivos: Array<{ path: string; basename: string }>) {
+    return { getMarkdownFiles: () => arquivos };
+  }
+
+  function makeCache(frontmatters: Record<string, Record<string, unknown>>) {
+    return {
+      getFileCache: (arquivo: { path: string }) => {
+        const fm = frontmatters[arquivo.path];
+        return fm ? { frontmatter: fm } : null;
+      },
+    };
+  }
+
+  it('validarIntegridadePreviewPacoteOperacional retorna ok em preview básico sem payload', () => {
+    const service = makeService();
+    const resultado = service.validarIntegridadePreviewPacoteOperacional(CONTEXTO);
+
+    expect(resultado.nivel).toBe('ok');
+    expect(resultado.valido).toBe(true);
+    expect(resultado.erros).toBe(0);
+    expect(resultado.avisos).toBe(0);
+    expect(resultado.totalArquivos).toBe(3);
+    expect(resultado.totalItensPayload).toBe(0);
+    expect(resultado.totalArquivosItens).toBe(0);
+  });
+
+  it('validarIntegridadePlanoEscritaPacoteOperacional retorna ok', () => {
+    const service = makeService();
+    const resultado = service.validarIntegridadePlanoEscritaPacoteOperacional(CONTEXTO);
+
+    expect(resultado.nivel).toBe('ok');
+    expect(resultado.valido).toBe(true);
+    expect(resultado.erros).toBe(0);
+    expect(resultado.totalArquivos).toBe(3);
+  });
+
+  it('validarIntegridadePayloadContrariusDoVault valida payload extraído do vault', async () => {
+    const service = makeService();
+    const vault = makeVault([
+      { path: '02_Consciencias/C1.md', basename: 'C1' },
+    ]);
+    const cache = makeCache({
+      '02_Consciencias/C1.md': { id: 'c1', titulo: 'Consciência 1' },
+    });
+
+    const resultado = await service.validarIntegridadePayloadContrariusDoVault(
+      CONTEXTO, vault, cache,
+    );
+
+    expect(resultado.integridade).toBeDefined();
+    expect(resultado.integridade.nivel).toBe('ok');
+    expect(resultado.integridade.valido).toBe(true);
+    expect(resultado.integridade.totalItensPayload).toBe(1);
+    expect(resultado.integridade.totalArquivosItens).toBe(1);
+  });
+
+  it('retorno de validarIntegridadePayloadContrariusDoVault inclui extracao, filtro, resumo e integridade', async () => {
+    const service = makeService();
+    const vault = makeVault([]);
+    const cache = makeCache({});
+
+    const resultado = await service.validarIntegridadePayloadContrariusDoVault(
+      CONTEXTO, vault, cache,
+    );
+
+    expect(resultado.extracao).toBeDefined();
+    expect(resultado.filtro).toBeDefined();
+    expect(resultado.resumo).toBeDefined();
+    expect(resultado.integridade).toBeDefined();
+  });
+
+  it('validarIntegridadePayloadContrariusDoVault não chama saveSettings', async () => {
+    let saveCount = 0;
+    const service = new ScrivenerBridgeService({ settings: {}, async saveSettings() { saveCount++; } });
+    const vault = makeVault([]);
+    const cache = makeCache({});
+
+    await service.validarIntegridadePayloadContrariusDoVault(CONTEXTO, vault, cache);
+
+    expect(saveCount).toBe(0);
+  });
+});
