@@ -157,11 +157,11 @@ describe('scrivener-package-plan-model', () => {
         const readme = plano.arquivos.find(arquivo => arquivo.caminhoRelativo === 'README.md');
 
         expect(readme?.tipo).toBe('readme');
-        expect(readme?.conteudo).toContain('Contrarius Scrivener Package Preview');
-        expect(readme?.conteudo).toContain('Este plano ainda nao grava arquivos reais do Scrivener.');
+        expect(readme?.conteudo).toContain('# Contrarius Scrivener package');
+        expect(readme?.conteudo).toContain('No payload items were exported.');
     });
 
-    it('readme menciona quantidade de itens quando payload tem itens', () => {
+    it('readme contem links para payload/items quando payload tem itens', () => {
         const manifesto = criarManifestoBase();
         const payload = criarPayloadScrivener({
             manifestoId: manifesto.id,
@@ -174,8 +174,8 @@ describe('scrivener-package-plan-model', () => {
         const plano = criarPlanoPacoteScrivener(manifesto, { payload });
         const readme = plano.arquivos.find(a => a.caminhoRelativo === 'README.md');
 
-        expect(readme?.conteudo).toContain('Itens de payload: 2');
-        expect(readme?.conteudo).toContain('Arquivos de item: 2');
+        expect(readme?.conteudo).toContain('[A](payload/items/evento/a.md)');
+        expect(readme?.conteudo).toContain('[B](payload/items/lugar/b.md)');
     });
 
     it('computes file sizes and total size', () => {
@@ -187,14 +187,14 @@ describe('scrivener-package-plan-model', () => {
         );
     });
 
-    it('uses sem livro in readme when manifest has no livro', () => {
+    it('readme nao inclui Book quando manifesto nao tem livro', () => {
         const manifesto = criarManifestoBase();
         delete manifesto.livro;
 
         const plano = criarPlanoPacoteScrivener(manifesto);
         const readme = plano.arquivos.find(arquivo => arquivo.caminhoRelativo === 'README.md');
 
-        expect(readme?.conteudo).toContain('Livro: sem livro');
+        expect(readme?.conteudo).not.toContain('**Book:**');
     });
 
     it('backward compatible: old calls without options still work', () => {
