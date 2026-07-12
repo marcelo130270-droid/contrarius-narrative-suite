@@ -21,11 +21,12 @@ describe('scrivener-package-write-plan-model', () => {
         const plano = criarPlanoPacoteScrivener(criarManifestoBase());
         const escrita = criarPlanoEscritaPacoteScrivener(plano);
 
-        expect(escrita.totalOperacoes).toBe(3);
+        expect(escrita.totalOperacoes).toBe(4);
         expect(escrita.operacoes.map(operacao => operacao.caminhoRelativo)).toEqual([
             'manifest.json',
             'payload/index.json',
             'README.md',
+            'integrity/report.json',
         ]);
     });
 
@@ -37,6 +38,7 @@ describe('scrivener-package-write-plan-model', () => {
             'contrarius-scrivener-packages/exportacao-livro-1.scrivener-package/manifest.json',
             'contrarius-scrivener-packages/exportacao-livro-1.scrivener-package/payload/index.json',
             'contrarius-scrivener-packages/exportacao-livro-1.scrivener-package/README.md',
+            'contrarius-scrivener-packages/exportacao-livro-1.scrivener-package/integrity/report.json',
         ]);
     });
 

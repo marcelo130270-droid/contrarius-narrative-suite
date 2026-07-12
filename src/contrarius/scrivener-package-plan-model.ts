@@ -3,8 +3,9 @@ import type { PayloadScrivener } from './scrivener-package-payload-model';
 import { criarPayloadScrivener } from './scrivener-package-payload-model';
 import { criarArquivosMarkdownPayloadScrivener } from './scrivener-payload-markdown-file-model';
 import { criarReadmePacoteScrivener } from './scrivener-package-readme-model';
+import { criarArquivoRelatorioIntegridadePacoteScrivener } from './scrivener-package-integrity-report-model';
 
-export type TipoArquivoPlanoScrivener = 'manifest' | 'payload' | 'readme' | 'payload-item';
+export type TipoArquivoPlanoScrivener = 'manifest' | 'payload' | 'readme' | 'payload-item' | 'integrity-report';
 
 export interface ArquivoPlanoPacoteScrivener {
     caminhoRelativo: string;
@@ -69,12 +70,25 @@ export function criarPlanoPacoteScrivener(
         arquivo => criarArquivoPlanoScrivener(arquivo.caminhoRelativo, 'payload-item', arquivo.conteudo),
     );
 
-    const arquivos = [
+    const arquivosBase = [
         criarArquivoPlanoScrivener('manifest.json', 'manifest', criarManifestJson(manifesto)),
         criarArquivoPlanoScrivener('payload/index.json', 'payload', gerarPayloadIndexJson(payload)),
         criarArquivoPlanoScrivener('README.md', 'readme', criarReadmePacoteScrivener(manifesto, payload).conteudo),
         ...arquivosItem,
     ];
+
+    // Plano provisório sem o relatório evita circularidade na validação
+    const planoProvisorio: PlanoPacoteScrivener = {
+        manifesto,
+        arquivos: arquivosBase,
+        totalArquivos: arquivosBase.length,
+        tamanhoTotalCaracteres: arquivosBase.reduce((total, a) => total + a.tamanhoCaracteres, 0),
+    };
+
+    const relatorio = criarArquivoRelatorioIntegridadePacoteScrivener(planoProvisorio);
+    const arquivoRelatorio = criarArquivoPlanoScrivener(relatorio.caminhoRelativo, 'integrity-report', relatorio.conteudo);
+
+    const arquivos = [...arquivosBase, arquivoRelatorio];
 
     return {
         manifesto,
