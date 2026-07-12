@@ -15,7 +15,12 @@ import { ScrivenerBridgeService } from './contrarius/scrivener-bridge-service';
 import type { ResultadoPlanoEscritaPacoteScrivenerOperacional } from './contrarius/scrivener-bridge-service';
 import type { ResumoPayloadScrivener } from './contrarius/scrivener-payload-summary-model';
 import type { FiltrosPayloadScrivener } from './contrarius/scrivener-payload-filter-model';
-import type { TipoItemPayloadScrivener } from './contrarius/scrivener-package-payload-model';
+import {
+    type EstadoFiltrosPayloadScrivener,
+    normalizarEstadoFiltrosPayloadScrivener,
+    estadoFiltrosPayloadScrivenerParaFiltros,
+    FILTROS_PAYLOAD_SCRIVENER_VAZIOS,
+} from './contrarius/scrivener-payload-filter-settings-model';
 import type { ContextoManifestoScrivenerOperacional } from './contrarius/scrivener-package-manifest-factory';
 import { resumirEstadoScrivener, type ResumoEstadoScrivener } from './contrarius/scrivener-state-summary-model';
 import { listarHistoricoPacotesScrivener, type ItemHistoricoPacoteScrivener } from './contrarius/scrivener-package-history-model';
@@ -56,6 +61,7 @@ export class StorytellerSuiteSettingTab extends PluginSettingTab {
     private filtroPayloadPeriodoScrivener = '';
     private filtroPayloadTextoScrivener = '';
     private filtroPayloadTipoScrivener = '';
+    private filtrosPayloadScrivenerInicializados = false;
 
     display(): void {
         const token = ++this.activeRenderToken;
@@ -1393,19 +1399,49 @@ export class StorytellerSuiteSettingTab extends PluginSettingTab {
 
 
     private getFiltrosPayloadScrivener(): FiltrosPayloadScrivener {
-        const filtros: FiltrosPayloadScrivener = {};
-        const tipo = this.filtroPayloadTipoScrivener.trim();
-        if (tipo) filtros.tipos = [tipo as TipoItemPayloadScrivener];
-        const livro = this.filtroPayloadLivroScrivener.trim();
-        if (livro) filtros.livros = [livro];
-        const periodo = this.filtroPayloadPeriodoScrivener.trim();
-        if (periodo) filtros.periodos = [periodo];
-        const texto = this.filtroPayloadTextoScrivener.trim();
-        if (texto) filtros.textoBusca = texto;
-        return filtros;
+        return estadoFiltrosPayloadScrivenerParaFiltros(this.obterEstadoFiltrosPayloadScrivenerAtual());
+    }
+
+    private carregarFiltrosPayloadScrivenerPersistidos(): void {
+        if (this.filtrosPayloadScrivenerInicializados) return;
+        const estado = normalizarEstadoFiltrosPayloadScrivener(
+            this.plugin.settings.scrivenerPayloadFilters,
+        );
+        this.filtroPayloadTipoScrivener = estado.tipo ?? '';
+        this.filtroPayloadLivroScrivener = estado.livro ?? '';
+        this.filtroPayloadPeriodoScrivener = estado.periodo ?? '';
+        this.filtroPayloadTextoScrivener = estado.textoBusca ?? '';
+        this.filtrosPayloadScrivenerInicializados = true;
+    }
+
+    private obterEstadoFiltrosPayloadScrivenerAtual(): EstadoFiltrosPayloadScrivener {
+        return normalizarEstadoFiltrosPayloadScrivener({
+            tipo: this.filtroPayloadTipoScrivener as EstadoFiltrosPayloadScrivener['tipo'],
+            livro: this.filtroPayloadLivroScrivener,
+            periodo: this.filtroPayloadPeriodoScrivener,
+            textoBusca: this.filtroPayloadTextoScrivener,
+        });
+    }
+
+    private async salvarFiltrosPayloadScrivenerPersistidos(): Promise<void> {
+        this.plugin.settings.scrivenerPayloadFilters = this.obterEstadoFiltrosPayloadScrivenerAtual();
+        await this.plugin.saveSettings();
+        new Notice('Scrivener payload filters saved.');
+    }
+
+    private async limparFiltrosPayloadScrivenerPersistidos(): Promise<void> {
+        this.filtroPayloadTipoScrivener = '';
+        this.filtroPayloadLivroScrivener = '';
+        this.filtroPayloadPeriodoScrivener = '';
+        this.filtroPayloadTextoScrivener = '';
+        this.plugin.settings.scrivenerPayloadFilters = FILTROS_PAYLOAD_SCRIVENER_VAZIOS;
+        await this.plugin.saveSettings();
+        new Notice('Scrivener payload filters cleared.');
     }
 
     private renderScrivenerVaultPayloadPreview(container: HTMLElement): void {
+        this.carregarFiltrosPayloadScrivenerPersistidos();
+
         new Setting(container).setName('Vault payload preview').setHeading();
 
         const TIPOS_PAYLOAD = ['consciencia', 'retrovida', 'evento', 'lugar', 'relacao', 'grupo', 'objeto', 'nota'];
@@ -1477,6 +1513,22 @@ export class StorytellerSuiteSettingTab extends PluginSettingTab {
                     .setDesc(resumo.primeirosAvisos.join('; '));
             }
         }
+
+        new Setting(container)
+            .setName('Payload filter actions')
+            .setDesc('Save or clear the current filter values.')
+            .addButton(button => button
+                .setButtonText('Save payload filters')
+                .onClick(async () => {
+                    await this.salvarFiltrosPayloadScrivenerPersistidos();
+                }))
+            .addButton(button => button
+                .setButtonText('Clear payload filters')
+                .onClick(async () => {
+                    await this.limparFiltrosPayloadScrivenerPersistidos();
+                    container.empty();
+                    this.renderScrivenerTab(container);
+                }));
 
         new Setting(container)
             .setName('Preview vault payload')

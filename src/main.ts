@@ -3,6 +3,11 @@
 
 // Leaflet base styles are maintained in styles.css so Obsidian can lint authored CSS.
 import type { EstadoPacoteScrivener } from './contrarius/scrivener-alerts-panel-model';
+import {
+    type EstadoFiltrosPayloadScrivener,
+    FILTROS_PAYLOAD_SCRIVENER_VAZIOS,
+    normalizarEstadoFiltrosPayloadScrivener,
+} from './contrarius/scrivener-payload-filter-settings-model';
 import * as L from 'leaflet';
 
 // Note: Global Leaflet exposure is now conditional and happens in onload() after settings are loaded
@@ -204,6 +209,8 @@ const FRONTMATTER_LINK_ONLY_SCALAR_FIELDS = new Set([
  interface StorytellerSuiteSettings {
     /** Persisted Scrivener package state used by the Contrarius/Scrivener bridge */
     scrivenerPacotes?: EstadoPacoteScrivener[];
+    /** Persisted Scrivener payload filter state */
+    scrivenerPayloadFilters?: EstadoFiltrosPayloadScrivener;
 
     stories: Story[]; // List of all stories
     activeStoryId: string; // Currently selected story
@@ -408,6 +415,7 @@ const FRONTMATTER_LINK_ONLY_SCALAR_FIELDS = new Set([
  */
  const DEFAULT_SETTINGS: StorytellerSuiteSettings = {
     scrivenerPacotes: [],
+    scrivenerPayloadFilters: FILTROS_PAYLOAD_SCRIVENER_VAZIOS,
     stories: [],
     activeStoryId: '',
     galleryUploadFolder: 'StorytellerSuite/GalleryUploads',
@@ -9002,6 +9010,10 @@ export default class StorytellerSuitePlugin extends Plugin {
             this.settings.scrivenerPacotes = [];
             settingsUpdated = true;
         }
+
+        this.settings.scrivenerPayloadFilters = normalizarEstadoFiltrosPayloadScrivener(
+            this.settings.scrivenerPayloadFilters,
+        );
 
 		if ((!this.settings.stories || this.settings.stories.length === 0)) {
 			// Try to detect old folders with data
