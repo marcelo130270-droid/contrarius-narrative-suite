@@ -5,6 +5,7 @@ import type { EstadoPacoteScrivener } from '../../src/contrarius/scrivener-alert
 import type { ContextoManifestoScrivenerOperacional } from '../../src/contrarius/scrivener-package-manifest-factory';
 import type { FontePayloadContrariusScrivener } from '../../src/contrarius/scrivener-contrarius-payload-extractor';
 import { resumirExtracaoPayloadScrivener } from '../../src/contrarius/scrivener-payload-summary-model';
+import type { ItemPayloadScrivener } from '../../src/contrarius/scrivener-package-payload-model';
 
 function makeHost(pacotes?: EstadoPacoteScrivener[]): ScrivenerBridgeSettingsHost & { saveSettings: ReturnType<typeof vi.fn> } {
   return {
@@ -996,5 +997,246 @@ describe('ScrivenerBridgeService Contrarius payload summary', () => {
     expect(resumo.totalAvisos).toBe(2);
     expect(resumo.nivel).toBe('warning');
     expect(resumo.primeirosAvisos.length).toBe(2);
+  });
+});
+
+describe('ScrivenerBridgeService payload filters', () => {
+  const CONTEXTO: ContextoManifestoScrivenerOperacional = {
+    tipo: 'exportacao',
+    origemVault: 'Contrarius Enantios',
+    diretorioPacotes: 'contrarius-scrivener-packages',
+    livro: 'Livro 1',
+    agora: new Date('2000-01-01T00:00:00.000Z'),
+  };
+
+  function makeService() {
+    return new ScrivenerBridgeService({ settings: {}, async saveSettings() {} });
+  }
+
+  function makeItem(overrides?: Partial<ItemPayloadScrivener>): ItemPayloadScrivener {
+    return { id: 'id-1', tipo: 'consciencia', titulo: 'Titulo', ...overrides };
+  }
+
+  function makeVault(arquivos: Array<{ path: string; basename: string }>) {
+    return { getMarkdownFiles: () => arquivos };
+  }
+
+  function makeCache(frontmatters: Record<string, Record<string, unknown>>) {
+    return {
+      getFileCache: (arquivo: { path: string }) => {
+        const fm = frontmatters[arquivo.path];
+        return fm ? { frontmatter: fm } : null;
+      },
+    };
+  }
+
+  function criarAdapterMemoria(existentes: Record<string, string> = {}) {
+    const arquivos = new Map<string, string>(Object.entries(existentes));
+    const dirs = new Set<string>();
+    return {
+      arquivos,
+      adapter: {
+        async exists(c: string) { return arquivos.has(c) || dirs.has(c); },
+        async mkdir(c: string) { dirs.add(c); },
+        async write(c: string, v: string) { arquivos.set(c, v); },
+      },
+    };
+  }
+
+  it('filtrarPayloadScrivener por tipo retém apenas itens do tipo especificado', () => {
+    const service = makeService();
+    const itens: ItemPayloadScrivener[] = [
+      makeItem({ id: 'c1', tipo: 'consciencia' }),
+      makeItem({ id: 'ev1', tipo: 'evento' }),
+      makeItem({ id: 'l1', tipo: 'lugar' }),
+    ];
+    const resultado = service.filtrarPayloadScrivener(itens, { tipos: ['evento'] });
+    expect(resultado.itens).toHaveLength(1);
+    expect(resultado.itens[0].id).toBe('ev1');
+    expect(resultado.totalOriginal).toBe(3);
+    expect(resultado.totalFiltrado).toBe(1);
+    expect(resultado.totalRemovido).toBe(2);
+  });
+
+  it('filtrarPayloadScrivener por livro', () => {
+    const service = makeService();
+    const itens: ItemPayloadScrivener[] = [
+      makeItem({ id: 'i1', livro: 'Livro Alpha' }),
+      makeItem({ id: 'i2', livro: 'Livro Beta' }),
+      makeItem({ id: 'i3', livro: 'Livro Alpha' }),
+    ];
+    const resultado = service.filtrarPayloadScrivener(itens, { livros: ['Livro Alpha'] });
+    expect(resultado.itens).toHaveLength(2);
+    expect(resultado.itens.map(i => i.id)).toContain('i1');
+    expect(resultado.itens.map(i => i.id)).toContain('i3');
+  });
+
+  it('filtrarPayloadScrivener por período', () => {
+    const service = makeService();
+    const itens: ItemPayloadScrivener[] = [
+      makeItem({ id: 'i1', periodo: 'Era 1' }),
+      makeItem({ id: 'i2', periodo: 'Era 2' }),
+    ];
+    const resultado = service.filtrarPayloadScrivener(itens, { periodos: ['Era 1'] });
+    expect(resultado.itens).toHaveLength(1);
+    expect(resultado.itens[0].id).toBe('i1');
+  });
+
+  it('filtrarPayloadScrivener retorna totalOriginal, totalFiltrado e totalRemovido corretos', () => {
+    const service = makeService();
+    const itens: ItemPayloadScrivener[] = [
+      makeItem({ id: 'i1', tipo: 'evento' }),
+      makeItem({ id: 'i2', tipo: 'lugar' }),
+      makeItem({ id: 'i3', tipo: 'evento' }),
+      makeItem({ id: 'i4', tipo: 'nota' }),
+    ];
+    const resultado = service.filtrarPayloadScrivener(itens, { tipos: ['evento'] });
+    expect(resultado.totalOriginal).toBe(4);
+    expect(resultado.totalFiltrado).toBe(2);
+    expect(resultado.totalRemovido).toBe(2);
+  });
+
+  it('filtrarPayloadScrivener não chama saveSettings', () => {
+    let saveCount = 0;
+    const service = new ScrivenerBridgeService({ settings: {}, async saveSettings() { saveCount++; } });
+    const itens: ItemPayloadScrivener[] = [makeItem({ id: 'i1', tipo: 'evento' })];
+    service.filtrarPayloadScrivener(itens, { tipos: ['evento'] });
+    expect(saveCount).toBe(0);
+  });
+
+  it('extrairFiltrarEResumirPayloadContrariusDoVault retorna resumo filtrado', async () => {
+    const service = makeService();
+    const vault = makeVault([
+      { path: '02_Consciencias/C1.md', basename: 'C1' },
+      { path: '02_Consciencias/C2.md', basename: 'C2' },
+      { path: '05_Eventos/Ev1.md', basename: 'Ev1' },
+    ]);
+    const cache = makeCache({
+      '02_Consciencias/C1.md': { id: 'c1', titulo: 'C1', livro: 'Livro Alpha' },
+      '02_Consciencias/C2.md': { id: 'c2', titulo: 'C2', livro: 'Livro Beta' },
+      '05_Eventos/Ev1.md': { id: 'ev1', titulo: 'Ev1', livro: 'Livro Alpha' },
+    });
+
+    const { extracao, filtro, resumo } = await service.extrairFiltrarEResumirPayloadContrariusDoVault(
+      vault, cache, { livros: ['Livro Alpha'] },
+    );
+
+    expect(extracao.totalItens).toBe(3);
+    expect(filtro.totalOriginal).toBe(3);
+    expect(filtro.totalFiltrado).toBe(2);
+    expect(filtro.totalRemovido).toBe(1);
+    expect(resumo.totalItens).toBe(filtro.totalFiltrado);
+  });
+
+  it('extrairFiltrarEResumirPayloadContrariusDoVault mantém avisos/descartados da extração original', async () => {
+    const service = makeService();
+    const vault = makeVault([
+      { path: '02_Consciencias/C1.md', basename: 'C1' },
+    ]);
+    const cache = makeCache({
+      '02_Consciencias/C1.md': { id: 'c1', titulo: 'C1' },
+    });
+
+    const { extracao } = await service.extrairFiltrarEResumirPayloadContrariusDoVault(
+      vault, cache, { tipos: ['evento'] },
+    );
+
+    expect(extracao.totalItens).toBe(1);
+    expect(Array.isArray(extracao.avisos)).toBe(true);
+    expect(typeof extracao.descartados).toBe('number');
+  });
+
+  it('extrairFiltrarEResumirPayloadContrariusDoVault não chama saveSettings', async () => {
+    let saveCount = 0;
+    const service = new ScrivenerBridgeService({ settings: {}, async saveSettings() { saveCount++; } });
+    const vault = makeVault([{ path: '02_Consciencias/C.md', basename: 'C' }]);
+    const cache = makeCache({ '02_Consciencias/C.md': { id: 'c1', titulo: 'C' } });
+
+    await service.extrairFiltrarEResumirPayloadContrariusDoVault(vault, cache, { tipos: ['evento'] });
+
+    expect(saveCount).toBe(0);
+  });
+
+  it('executarEscritaPacoteOperacionalObsidianComPayloadDoVaultFiltrado grava apenas itens filtrados', async () => {
+    const service = makeService();
+    const vault = makeVault([
+      { path: '02_Consciencias/C1.md', basename: 'C1' },
+      { path: '05_Eventos/Ev1.md', basename: 'Ev1' },
+    ]);
+    const cache = makeCache({
+      '02_Consciencias/C1.md': { id: 'c1', titulo: 'Consciência 1' },
+      '05_Eventos/Ev1.md': { id: 'ev1', titulo: 'Evento 1' },
+    });
+    const memoria = criarAdapterMemoria();
+
+    const resultado = await service.executarEscritaPacoteOperacionalObsidianComPayloadDoVaultFiltrado(
+      CONTEXTO, vault, cache, memoria.adapter, { tipos: ['evento'] },
+    );
+
+    expect(resultado.filtro.totalOriginal).toBe(2);
+    expect(resultado.filtro.totalFiltrado).toBe(1);
+    expect(resultado.filtro.totalRemovido).toBe(1);
+
+    const payloadPath = 'contrarius-scrivener-packages/exportacao-livro-1-2000-01-01t00-00-00-000z.scrivener-package/payload/index.json';
+    const conteudo = memoria.arquivos.get(payloadPath);
+    expect(conteudo).toBeDefined();
+    const payload = JSON.parse(conteudo!);
+    expect(payload.totalItens).toBe(1);
+    expect(payload.itens[0].id).toBe('ev1');
+  });
+
+  it('executarEscritaPacoteOperacionalObsidianComPayloadDoVaultFiltrado não chama saveSettings', async () => {
+    let saveCount = 0;
+    const service = new ScrivenerBridgeService({ settings: {}, async saveSettings() { saveCount++; } });
+    const vault = makeVault([{ path: '02_Consciencias/C.md', basename: 'C' }]);
+    const cache = makeCache({ '02_Consciencias/C.md': { id: 'c1', titulo: 'C' } });
+    const memoria = criarAdapterMemoria();
+
+    await service.executarEscritaPacoteOperacionalObsidianComPayloadDoVaultFiltrado(
+      CONTEXTO, vault, cache, memoria.adapter,
+    );
+
+    expect(saveCount).toBe(0);
+  });
+
+  it('executarEscritaPacoteOperacionalObsidianComPayloadDoVaultFiltrado mantém avisos/descartados da extração original', async () => {
+    const service = makeService();
+    const vault = makeVault([
+      { path: '02_Consciencias/C1.md', basename: 'C1' },
+    ]);
+    const cache = makeCache({
+      '02_Consciencias/C1.md': { id: 'c1', titulo: 'C1' },
+    });
+    const memoria = criarAdapterMemoria();
+
+    const resultado = await service.executarEscritaPacoteOperacionalObsidianComPayloadDoVaultFiltrado(
+      CONTEXTO, vault, cache, memoria.adapter, { tipos: ['evento'] },
+    );
+
+    expect(resultado.extracao.totalItens).toBe(1);
+    expect(Array.isArray(resultado.extracao.avisos)).toBe(true);
+    expect(typeof resultado.extracao.descartados).toBe('number');
+    expect(resultado.filtro.totalFiltrado).toBe(0);
+  });
+
+  it('sem filtros retorna todos os itens extraídos', async () => {
+    const service = makeService();
+    const vault = makeVault([
+      { path: '02_Consciencias/C1.md', basename: 'C1' },
+      { path: '05_Eventos/Ev1.md', basename: 'Ev1' },
+    ]);
+    const cache = makeCache({
+      '02_Consciencias/C1.md': { id: 'c1', titulo: 'C1' },
+      '05_Eventos/Ev1.md': { id: 'ev1', titulo: 'Ev1' },
+    });
+    const memoria = criarAdapterMemoria();
+
+    const resultado = await service.executarEscritaPacoteOperacionalObsidianComPayloadDoVaultFiltrado(
+      CONTEXTO, vault, cache, memoria.adapter,
+    );
+
+    expect(resultado.filtro.totalOriginal).toBe(2);
+    expect(resultado.filtro.totalFiltrado).toBe(2);
+    expect(resultado.filtro.totalRemovido).toBe(0);
   });
 });

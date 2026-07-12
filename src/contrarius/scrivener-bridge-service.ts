@@ -19,6 +19,7 @@ import type { AdaptadorControladoEscritaScrivenerOptions, GravadorPacoteScrivene
 import { criarAdaptadorControladoEscritaPacoteScrivener } from './scrivener-package-controlled-write-adapter';
 import { criarGravadorPacoteScrivenerObsidian } from './scrivener-obsidian-write-adapter';
 import type { DataAdapterEscritaScrivenerLike } from './scrivener-obsidian-write-adapter';
+import type { ItemPayloadScrivener } from './scrivener-package-payload-model';
 import type { FontePayloadContrariusScrivener, ResultadoExtracaoPayloadContrariusScrivener } from './scrivener-contrarius-payload-extractor';
 import { extrairItensPayloadContrariusScrivener } from './scrivener-contrarius-payload-extractor';
 import type {
@@ -31,6 +32,8 @@ import { criarFontePayloadContrariusScrivenerDoVault } from './scrivener-contrar
 import type { ContextoPlanoPacoteScrivenerOperacional } from './scrivener-package-plan-factory';
 import type { ResumoPayloadScrivener } from './scrivener-payload-summary-model';
 import { resumirExtracaoPayloadScrivener } from './scrivener-payload-summary-model';
+import type { FiltrosPayloadScrivener, ResultadoFiltroPayloadScrivener } from './scrivener-payload-filter-model';
+import { filtrarItensPayloadScrivener } from './scrivener-payload-filter-model';
 
 export interface ScrivenerBridgeSettingsHost {
   settings: {
@@ -207,6 +210,55 @@ export class ScrivenerBridgeService {
         const preview = criarPlanoPacoteOperacionalScrivener({ ...contexto, itensPayload: resultado.itens });
         const escrita = criarPlanoEscritaPacoteScrivener(preview.plano);
         return { preview, escrita };
+    }
+
+    filtrarPayloadScrivener(
+        itens: readonly ItemPayloadScrivener[],
+        filtros?: FiltrosPayloadScrivener,
+    ): ResultadoFiltroPayloadScrivener {
+        return filtrarItensPayloadScrivener(itens, filtros);
+    }
+
+    async extrairFiltrarEResumirPayloadContrariusDoVault<TArquivo extends ArquivoMarkdownContrariusPayloadLike>(
+        vault: VaultContrariusPayloadLike<TArquivo>,
+        metadataCache: MetadataCacheContrariusPayloadLike<TArquivo>,
+        filtros?: FiltrosPayloadScrivener,
+        opcoes?: OpcoesFonteVaultContrariusPayload,
+    ): Promise<{
+        extracao: ResultadoExtracaoPayloadContrariusScrivener;
+        filtro: ResultadoFiltroPayloadScrivener;
+        resumo: ResumoPayloadScrivener;
+    }> {
+        const extracao = await this.extrairPayloadContrariusDoVault(vault, metadataCache, opcoes);
+        const filtro = filtrarItensPayloadScrivener(extracao.itens, filtros);
+        const extracaoFiltrada: ResultadoExtracaoPayloadContrariusScrivener = {
+            ...extracao,
+            itens: filtro.itens,
+            totalItens: filtro.totalFiltrado,
+        };
+        const resumo = resumirExtracaoPayloadScrivener(extracaoFiltrada);
+        return { extracao, filtro, resumo };
+    }
+
+    async executarEscritaPacoteOperacionalObsidianComPayloadDoVaultFiltrado<TArquivo extends ArquivoMarkdownContrariusPayloadLike>(
+        contexto: ContextoManifestoScrivenerOperacional,
+        vault: VaultContrariusPayloadLike<TArquivo>,
+        metadataCache: MetadataCacheContrariusPayloadLike<TArquivo>,
+        adapter: DataAdapterEscritaScrivenerLike,
+        filtros?: FiltrosPayloadScrivener,
+        options: AdaptadorControladoEscritaScrivenerOptions = {},
+        opcoesFonte: OpcoesFonteVaultContrariusPayload = {},
+    ): Promise<ResultadoExecucaoPacoteScrivenerOperacional & {
+        extracao: ResultadoExtracaoPayloadContrariusScrivener;
+        filtro: ResultadoFiltroPayloadScrivener;
+        resumo: ResumoPayloadScrivener;
+    }> {
+        const { extracao, filtro, resumo } = await this.extrairFiltrarEResumirPayloadContrariusDoVault(
+            vault, metadataCache, filtros, opcoesFonte,
+        );
+        const contextoComPayload: ContextoPlanoPacoteScrivenerOperacional = { ...contexto, itensPayload: filtro.itens };
+        const execucao = await this.executarEscritaPacoteOperacionalObsidian(contextoComPayload, adapter, options);
+        return { ...execucao, extracao, filtro, resumo };
     }
 
 }

@@ -14,6 +14,8 @@ import { gerarAlertasScrivener, type AlertaScrivener, type EstadoPainelScrivener
 import { ScrivenerBridgeService } from './contrarius/scrivener-bridge-service';
 import type { ResultadoPlanoEscritaPacoteScrivenerOperacional } from './contrarius/scrivener-bridge-service';
 import type { ResumoPayloadScrivener } from './contrarius/scrivener-payload-summary-model';
+import type { FiltrosPayloadScrivener } from './contrarius/scrivener-payload-filter-model';
+import type { TipoItemPayloadScrivener } from './contrarius/scrivener-package-payload-model';
 import type { ContextoManifestoScrivenerOperacional } from './contrarius/scrivener-package-manifest-factory';
 import { resumirEstadoScrivener, type ResumoEstadoScrivener } from './contrarius/scrivener-state-summary-model';
 import { listarHistoricoPacotesScrivener, type ItemHistoricoPacoteScrivener } from './contrarius/scrivener-package-history-model';
@@ -50,6 +52,10 @@ export class StorytellerSuiteSettingTab extends PluginSettingTab {
 
     private activeRenderToken = 0;
     private ultimoResumoPayloadScrivener?: ResumoPayloadScrivener;
+    private filtroPayloadLivroScrivener = '';
+    private filtroPayloadPeriodoScrivener = '';
+    private filtroPayloadTextoScrivener = '';
+    private filtroPayloadTipoScrivener = '';
 
     display(): void {
         const token = ++this.activeRenderToken;
@@ -1267,17 +1273,18 @@ export class StorytellerSuiteSettingTab extends PluginSettingTab {
                 .setButtonText('Write controlled package')
                 .onClick(async () => {
                     const contexto = this.getOperationalScrivenerManifestContext();
-                    const resultado = await this.getScrivenerBridgeService().executarEscritaPacoteOperacionalObsidianComPayloadDoVault(
+                    const resultado = await this.getScrivenerBridgeService().executarEscritaPacoteOperacionalObsidianComPayloadDoVaultFiltrado(
                         contexto,
                         this.app.vault,
                         this.app.metadataCache,
                         this.app.vault.adapter,
+                        this.getFiltrosPayloadScrivener(),
                         { sobrescrever: false },
                         { incluirTexto: false, incluirNotasSoltas: false },
                     );
                     if (resultado.resumo) this.ultimoResumoPayloadScrivener = resultado.resumo;
                     if (resultado.execucao.operacoesErro === 0) {
-                        new Notice(`Controlled Scrivener package written with ${resultado.extracao.totalItens} payload items.`);
+                        new Notice(`Controlled Scrivener package written with ${resultado.filtro.totalFiltrado}/${resultado.filtro.totalOriginal} payload items after filters.`);
                         await this.getScrivenerBridgeService().registrarManifestoOperacional(contexto);
                     } else {
                         const descartados = resultado.extracao.descartados > 0 ? ` Discarded: ${resultado.extracao.descartados}.` : '';
@@ -1385,8 +1392,60 @@ export class StorytellerSuiteSettingTab extends PluginSettingTab {
 
 
 
+    private getFiltrosPayloadScrivener(): FiltrosPayloadScrivener {
+        const filtros: FiltrosPayloadScrivener = {};
+        const tipo = this.filtroPayloadTipoScrivener.trim();
+        if (tipo) filtros.tipos = [tipo as TipoItemPayloadScrivener];
+        const livro = this.filtroPayloadLivroScrivener.trim();
+        if (livro) filtros.livros = [livro];
+        const periodo = this.filtroPayloadPeriodoScrivener.trim();
+        if (periodo) filtros.periodos = [periodo];
+        const texto = this.filtroPayloadTextoScrivener.trim();
+        if (texto) filtros.textoBusca = texto;
+        return filtros;
+    }
+
     private renderScrivenerVaultPayloadPreview(container: HTMLElement): void {
         new Setting(container).setName('Vault payload preview').setHeading();
+
+        const TIPOS_PAYLOAD = ['consciencia', 'retrovida', 'evento', 'lugar', 'relacao', 'grupo', 'objeto', 'nota'];
+
+        new Setting(container)
+            .setName('Type filter')
+            .setDesc('Filter payload items by type.')
+            .addDropdown(dropdown => {
+                dropdown.addOption('', 'all');
+                TIPOS_PAYLOAD.forEach(t => dropdown.addOption(t, t));
+                dropdown.setValue(this.filtroPayloadTipoScrivener);
+                dropdown.onChange(value => { this.filtroPayloadTipoScrivener = value; });
+            });
+
+        new Setting(container)
+            .setName('Book filter')
+            .setDesc('Filter by book name.')
+            .addText(text => text
+                .setPlaceholder('Book name')
+                .setValue(this.filtroPayloadLivroScrivener)
+                .onChange(value => { this.filtroPayloadLivroScrivener = value; })
+            );
+
+        new Setting(container)
+            .setName('Period filter')
+            .setDesc('Filter by period.')
+            .addText(text => text
+                .setPlaceholder('Period')
+                .setValue(this.filtroPayloadPeriodoScrivener)
+                .onChange(value => { this.filtroPayloadPeriodoScrivener = value; })
+            );
+
+        new Setting(container)
+            .setName('Search filter')
+            .setDesc('Search across title, id, path, book, period and tags.')
+            .addText(text => text
+                .setPlaceholder('Search...')
+                .setValue(this.filtroPayloadTextoScrivener)
+                .onChange(value => { this.filtroPayloadTextoScrivener = value; })
+            );
 
         const resumo = this.ultimoResumoPayloadScrivener;
         if (!resumo) {
@@ -1427,13 +1486,14 @@ export class StorytellerSuiteSettingTab extends PluginSettingTab {
                 .onClick(async () => {
                     button.setDisabled(true);
                     try {
-                        this.ultimoResumoPayloadScrivener = await this.getScrivenerBridgeService().resumirPayloadContrariusDoVault(
+                        const resultado = await this.getScrivenerBridgeService().extrairFiltrarEResumirPayloadContrariusDoVault(
                             this.app.vault,
                             this.app.metadataCache,
+                            this.getFiltrosPayloadScrivener(),
                             { incluirTexto: false, incluirNotasSoltas: false },
                         );
-                        const r = this.ultimoResumoPayloadScrivener;
-                        new Notice(`Scrivener payload preview: ${r.totalItens} items, ${r.totalDescartados} discarded, ${r.totalAvisos} warnings.`);
+                        this.ultimoResumoPayloadScrivener = resultado.resumo;
+                        new Notice(`Scrivener payload preview: ${resultado.filtro.totalFiltrado}/${resultado.filtro.totalOriginal} items after filters.`);
                     } finally {
                         button.setDisabled(false);
                     }
