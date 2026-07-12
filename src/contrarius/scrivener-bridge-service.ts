@@ -17,8 +17,10 @@ import type { AdaptadorEscritaPacoteScrivener, ResultadoExecucaoEscritaPacoteScr
 import { executarPlanoEscritaPacoteScrivener } from './scrivener-package-write-executor';
 import type { AdaptadorControladoEscritaScrivenerOptions, GravadorPacoteScrivener } from './scrivener-package-controlled-write-adapter';
 import { criarAdaptadorControladoEscritaPacoteScrivener } from './scrivener-package-controlled-write-adapter';
-import { criarGravadorPacoteScrivenerObsidian } from './scrivener-obsidian-write-adapter';
-import type { DataAdapterEscritaScrivenerLike } from './scrivener-obsidian-write-adapter';
+import { criarGravadorPacoteScrivenerObsidian, criarLeitorPacoteScrivenerObsidian } from './scrivener-obsidian-write-adapter';
+import type { DataAdapterEscritaScrivenerLike, DataAdapterLeituraScrivenerLike } from './scrivener-obsidian-write-adapter';
+import type { LeitorPacoteScrivener, ResultadoVerificacaoEscritaPacoteScrivener } from './scrivener-package-write-verification-model';
+import { verificarEscritaPacoteScrivener } from './scrivener-package-write-verification-model';
 import type { ItemPayloadScrivener } from './scrivener-package-payload-model';
 import type { FontePayloadContrariusScrivener, ResultadoExtracaoPayloadContrariusScrivener } from './scrivener-contrarius-payload-extractor';
 import { extrairItensPayloadContrariusScrivener } from './scrivener-contrarius-payload-extractor';
@@ -275,6 +277,55 @@ export class ScrivenerBridgeService {
         const preview = this.criarPreviewPacoteOperacional(contextoComPayload);
         const integridade = validarIntegridadePlanoPacoteScrivener(preview.plano);
         return { extracao, filtro, resumo, integridade };
+    }
+
+    async verificarEscritaPacoteOperacional(
+        contexto: ContextoManifestoScrivenerOperacional,
+        leitor: LeitorPacoteScrivener,
+    ): Promise<{
+        planoEscrita: ResultadoPlanoEscritaPacoteScrivenerOperacional;
+        verificacao: ResultadoVerificacaoEscritaPacoteScrivener;
+    }> {
+        const planoEscrita = this.criarPlanoEscritaPacoteOperacional(contexto);
+        const verificacao = await verificarEscritaPacoteScrivener(planoEscrita.escrita, leitor);
+        return { planoEscrita, verificacao };
+    }
+
+    async verificarEscritaPacoteOperacionalObsidian(
+        contexto: ContextoManifestoScrivenerOperacional,
+        adapter: DataAdapterLeituraScrivenerLike,
+    ): Promise<{
+        planoEscrita: ResultadoPlanoEscritaPacoteScrivenerOperacional;
+        verificacao: ResultadoVerificacaoEscritaPacoteScrivener;
+    }> {
+        return this.verificarEscritaPacoteOperacional(
+            contexto,
+            criarLeitorPacoteScrivenerObsidian(adapter),
+        );
+    }
+
+    async executarEVerificarEscritaPacoteOperacionalObsidianComPayloadDoVaultFiltrado<TArquivo extends ArquivoMarkdownContrariusPayloadLike>(
+        contexto: ContextoManifestoScrivenerOperacional,
+        vault: VaultContrariusPayloadLike<TArquivo>,
+        metadataCache: MetadataCacheContrariusPayloadLike<TArquivo>,
+        adapter: DataAdapterEscritaScrivenerLike & DataAdapterLeituraScrivenerLike,
+        filtros?: FiltrosPayloadScrivener,
+        options: AdaptadorControladoEscritaScrivenerOptions = {},
+        opcoesFonte: OpcoesFonteVaultContrariusPayload = {},
+    ): Promise<ResultadoExecucaoPacoteScrivenerOperacional & {
+        extracao: ResultadoExtracaoPayloadContrariusScrivener;
+        filtro: ResultadoFiltroPayloadScrivener;
+        resumo: ResumoPayloadScrivener;
+        verificacao: ResultadoVerificacaoEscritaPacoteScrivener;
+    }> {
+        const resultado = await this.executarEscritaPacoteOperacionalObsidianComPayloadDoVaultFiltrado(
+            contexto, vault, metadataCache, adapter, filtros, options, opcoesFonte,
+        );
+        const verificacao = await verificarEscritaPacoteScrivener(
+            resultado.planoEscrita.escrita,
+            criarLeitorPacoteScrivenerObsidian(adapter),
+        );
+        return { ...resultado, verificacao };
     }
 
     async executarEscritaPacoteOperacionalObsidianComPayloadDoVaultFiltrado<TArquivo extends ArquivoMarkdownContrariusPayloadLike>(

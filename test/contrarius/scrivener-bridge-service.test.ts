@@ -1243,6 +1243,132 @@ describe('ScrivenerBridgeService payload filters', () => {
   });
 });
 
+describe('ScrivenerBridgeService package write verification', () => {
+    const CONTEXTO: ContextoManifestoScrivenerOperacional = {
+        tipo: 'exportacao',
+        origemVault: 'Contrarius Enantios',
+        diretorioPacotes: 'contrarius-scrivener-packages',
+        livro: 'Livro 1',
+        agora: new Date('2000-01-01T00:00:00.000Z'),
+    };
+
+    function makeService() {
+        return new ScrivenerBridgeService({ settings: {}, async saveSettings() {} });
+    }
+
+    function criarAdapterMemoria(existentes: Record<string, string> = {}) {
+        const arquivos = new Map<string, string>(Object.entries(existentes));
+        const dirs = new Set<string>();
+        return {
+            arquivos,
+            adapter: {
+                async exists(c: string) { return arquivos.has(c) || dirs.has(c); },
+                async mkdir(c: string) { dirs.add(c); },
+                async write(c: string, v: string) { arquivos.set(c, v); },
+                async read(c: string) {
+                    const conteudo = arquivos.get(c);
+                    if (conteudo === undefined) throw new Error(`Arquivo não encontrado: ${c}`);
+                    return conteudo;
+                },
+            },
+        };
+    }
+
+    it('verificarEscritaPacoteOperacional retorna ok com leitor em memória pré-populado', async () => {
+        const service = makeService();
+        const plano = service.criarPlanoEscritaPacoteOperacional(CONTEXTO);
+        const arquivos = new Map<string, string>(
+            plano.escrita.operacoes.map(op => [op.caminhoDestino, op.conteudo]),
+        );
+        const leitor = {
+            async existeArquivoTexto(caminho: string) { return arquivos.has(caminho); },
+            async lerArquivoTexto(caminho: string) {
+                const c = arquivos.get(caminho);
+                if (c === undefined) throw new Error(`ausente: ${caminho}`);
+                return c;
+            },
+        };
+
+        const resultado = await service.verificarEscritaPacoteOperacional(CONTEXTO, leitor);
+
+        expect(resultado.verificacao.nivel).toBe('ok');
+        expect(resultado.verificacao.valido).toBe(true);
+        expect(resultado.verificacao.erros).toBe(0);
+        expect(resultado.verificacao.arquivosVerificados).toBe(4);
+        expect(resultado.planoEscrita.escrita.totalOperacoes).toBe(4);
+    });
+
+    it('verificarEscritaPacoteOperacionalObsidian usa adapter exists e read', async () => {
+        const service = makeService();
+        const plano = service.criarPlanoEscritaPacoteOperacional(CONTEXTO);
+        const existentes = Object.fromEntries(
+            plano.escrita.operacoes.map(op => [op.caminhoDestino, op.conteudo]),
+        );
+        const memoria = criarAdapterMemoria(existentes);
+
+        const resultado = await service.verificarEscritaPacoteOperacionalObsidian(CONTEXTO, memoria.adapter);
+
+        expect(resultado.verificacao.nivel).toBe('ok');
+        expect(resultado.verificacao.valido).toBe(true);
+        expect(resultado.verificacao.arquivosVerificados).toBe(4);
+    });
+
+    it('executarEVerificarEscritaPacoteOperacionalObsidianComPayloadDoVaultFiltrado escreve e verifica ok', async () => {
+        const service = makeService();
+        const vault = { getMarkdownFiles: () => [] };
+        const cache = { getFileCache: () => null };
+        const memoria = criarAdapterMemoria();
+
+        const resultado = await service.executarEVerificarEscritaPacoteOperacionalObsidianComPayloadDoVaultFiltrado(
+            CONTEXTO, vault, cache, memoria.adapter,
+        );
+
+        expect(resultado.execucao.operacoesErro).toBe(0);
+        expect(resultado.verificacao).toBeDefined();
+        expect(resultado.verificacao.nivel).toBe('ok');
+        expect(resultado.verificacao.valido).toBe(true);
+        expect(resultado.verificacao.totalOperacoes).toBe(resultado.planoEscrita.escrita.totalOperacoes);
+        expect(resultado.extracao).toBeDefined();
+        expect(resultado.filtro).toBeDefined();
+        expect(resultado.resumo).toBeDefined();
+    });
+
+    it('falha de leitura retorna verificacao error sem throw', async () => {
+        const service = makeService();
+        const vault = { getMarkdownFiles: () => [] };
+        const cache = { getFileCache: () => null };
+        const memoria = criarAdapterMemoria();
+        const adapterComFalhaLeitura = {
+            ...memoria.adapter,
+            async read(_c: string) { throw new Error('Falha de leitura simulada'); },
+        };
+
+        const resultado = await service.executarEVerificarEscritaPacoteOperacionalObsidianComPayloadDoVaultFiltrado(
+            CONTEXTO, vault, cache, adapterComFalhaLeitura,
+        );
+
+        expect(resultado.execucao.operacoesErro).toBe(0);
+        expect(resultado.verificacao.nivel).toBe('error');
+        expect(resultado.verificacao.valido).toBe(false);
+        expect(resultado.verificacao.erros).toBeGreaterThan(0);
+    });
+
+    it('verificarEscritaPacoteOperacional não chama saveSettings', async () => {
+        let saveCount = 0;
+        const service = new ScrivenerBridgeService({ settings: {}, async saveSettings() { saveCount++; } });
+        const plano = service.criarPlanoEscritaPacoteOperacional(CONTEXTO);
+        const arquivos = new Map(plano.escrita.operacoes.map(op => [op.caminhoDestino, op.conteudo]));
+        const leitor = {
+            async existeArquivoTexto(c: string) { return arquivos.has(c); },
+            async lerArquivoTexto(c: string) { return arquivos.get(c) ?? ''; },
+        };
+
+        await service.verificarEscritaPacoteOperacional(CONTEXTO, leitor);
+
+        expect(saveCount).toBe(0);
+    });
+});
+
 describe('ScrivenerBridgeService package integrity', () => {
   const CONTEXTO: ContextoManifestoScrivenerOperacional = {
     tipo: 'exportacao',

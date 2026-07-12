@@ -14,6 +14,7 @@ import { gerarAlertasScrivener, type AlertaScrivener, type EstadoPainelScrivener
 import { ScrivenerBridgeService } from './contrarius/scrivener-bridge-service';
 import type { ResultadoPlanoEscritaPacoteScrivenerOperacional } from './contrarius/scrivener-bridge-service';
 import type { ResultadoIntegridadePacoteScrivener } from './contrarius/scrivener-package-integrity-model';
+import type { ResultadoVerificacaoEscritaPacoteScrivener } from './contrarius/scrivener-package-write-verification-model';
 import type { ResumoPayloadScrivener } from './contrarius/scrivener-payload-summary-model';
 import type { FiltrosPayloadScrivener } from './contrarius/scrivener-payload-filter-model';
 import {
@@ -59,6 +60,7 @@ export class StorytellerSuiteSettingTab extends PluginSettingTab {
     private activeRenderToken = 0;
     private ultimoResumoPayloadScrivener?: ResumoPayloadScrivener;
     private ultimaIntegridadePacoteScrivener?: ResultadoIntegridadePacoteScrivener;
+    private ultimaVerificacaoEscritaPacoteScrivener?: ResultadoVerificacaoEscritaPacoteScrivener;
     private filtroPayloadLivroScrivener = '';
     private filtroPayloadPeriodoScrivener = '';
     private filtroPayloadTextoScrivener = '';
@@ -1274,6 +1276,7 @@ export class StorytellerSuiteSettingTab extends PluginSettingTab {
         this.renderScrivenerWritePlanPreview(container, planoEscrita);
         this.renderScrivenerVaultPayloadPreview(container);
         this.renderScrivenerPackageIntegrity(container);
+        this.renderScrivenerPackageWriteVerification(container);
 
         new Setting(container)
             .setName('Controlled package write')
@@ -1297,7 +1300,7 @@ export class StorytellerSuiteSettingTab extends PluginSettingTab {
                         this.renderScrivenerTab(container);
                         return;
                     }
-                    const resultado = await bridge.executarEscritaPacoteOperacionalObsidianComPayloadDoVaultFiltrado(
+                    const resultado = await bridge.executarEVerificarEscritaPacoteOperacionalObsidianComPayloadDoVaultFiltrado(
                         contexto,
                         this.app.vault,
                         this.app.metadataCache,
@@ -1307,13 +1310,16 @@ export class StorytellerSuiteSettingTab extends PluginSettingTab {
                         { incluirTexto: false, incluirNotasSoltas: false },
                     );
                     if (resultado.resumo) this.ultimoResumoPayloadScrivener = resultado.resumo;
-                    if (resultado.execucao.operacoesErro === 0) {
+                    this.ultimaVerificacaoEscritaPacoteScrivener = resultado.verificacao;
+                    if (resultado.execucao.operacoesErro === 0 && resultado.verificacao.valido) {
                         new Notice(`Controlled Scrivener package written with ${resultado.filtro.totalFiltrado}/${resultado.filtro.totalOriginal} payload items after filters.`);
                         await bridge.registrarManifestoOperacional(contexto);
-                    } else {
+                    } else if (resultado.execucao.operacoesErro > 0) {
                         const descartados = resultado.extracao.descartados > 0 ? ` Discarded: ${resultado.extracao.descartados}.` : '';
                         const avisos = resultado.extracao.avisos.length > 0 ? ` Warnings: ${resultado.extracao.avisos.length}.` : '';
                         new Notice(`Controlled Scrivener package write completed with errors. Errors: ${resultado.execucao.operacoesErro}.${descartados}${avisos}`);
+                    } else {
+                        new Notice('Controlled Scrivener package written but verification failed.');
                     }
                     container.empty();
                     this.renderScrivenerTab(container);
@@ -1614,6 +1620,50 @@ export class StorytellerSuiteSettingTab extends PluginSettingTab {
                         new Notice('Scrivener package integrity: OK.');
                     } else {
                         new Notice(`Scrivener package integrity: ${resultado.integridade.erros} errors, ${resultado.integridade.avisos} warnings.`);
+                    }
+                    container.empty();
+                    this.renderScrivenerTab(container);
+                }));
+    }
+
+    private renderScrivenerPackageWriteVerification(container: HTMLElement): void {
+        new Setting(container).setName('Package write verification').setHeading();
+
+        const verificacao = this.ultimaVerificacaoEscritaPacoteScrivener;
+
+        if (!verificacao) {
+            new Setting(container).setDesc('Package write not verified yet.');
+        } else {
+            new Setting(container)
+                .setName('Verification result')
+                .setDesc(
+                    `Level: ${verificacao.nivel}; valid: ${verificacao.valido}; errors: ${verificacao.erros}; warnings: ${verificacao.avisos}; total operations: ${verificacao.totalOperacoes}; files verified: ${verificacao.arquivosVerificados}; files absent: ${verificacao.arquivosAusentes}; files divergent: ${verificacao.arquivosDivergentes}.`,
+                );
+
+            if (verificacao.achados.length > 0) {
+                const primeiros = verificacao.achados.slice(0, 5);
+                new Setting(container)
+                    .setName('Findings')
+                    .setDesc(primeiros.map(a => `[${a.nivel}] ${a.codigo}: ${a.mensagem}`).join(' | '));
+            }
+        }
+
+        new Setting(container)
+            .setName('Verify last package write')
+            .setDesc('Check whether all files from the last write plan are present in the vault with matching content.')
+            .addButton(button => button
+                .setButtonText('Verify last package write')
+                .onClick(async () => {
+                    const contextoOperacionalScrivener = this.getOperationalScrivenerManifestContext();
+                    const resultado = await this.getScrivenerBridgeService().verificarEscritaPacoteOperacionalObsidian(
+                        contextoOperacionalScrivener,
+                        this.app.vault.adapter,
+                    );
+                    this.ultimaVerificacaoEscritaPacoteScrivener = resultado.verificacao;
+                    if (resultado.verificacao.nivel === 'ok') {
+                        new Notice('Scrivener package write verification: OK.');
+                    } else {
+                        new Notice(`Scrivener package write verification: ${resultado.verificacao.erros} errors, ${resultado.verificacao.avisos} warnings.`);
                     }
                     container.empty();
                     this.renderScrivenerTab(container);

@@ -85,7 +85,7 @@ export function criarPlanoPacoteScrivener(
         tamanhoTotalCaracteres: arquivosBase.reduce((total, a) => total + a.tamanhoCaracteres, 0),
     };
 
-    const relatorio = criarArquivoRelatorioIntegridadePacoteScrivener(planoProvisorio);
+    const relatorio = criarArquivoRelatorioIntegridadePacoteScrivener(planoProvisorio, manifesto.criadoEm);
     const arquivoRelatorio = criarArquivoPlanoScrivener(relatorio.caminhoRelativo, 'integrity-report', relatorio.conteudo);
 
     const arquivos = [...arquivosBase, arquivoRelatorio];
