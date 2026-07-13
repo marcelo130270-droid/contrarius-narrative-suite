@@ -3423,17 +3423,11 @@ export default class StorytellerSuitePlugin extends Plugin {
 	}
 
 	openScrivenerBridgeModal(): void {
-		const bridge = new ScrivenerBridgeService(this);
-		const getContexto = () => ({
-			tipo: 'exportacao' as const,
-			origemVault: this.app.vault.getName(),
-			diretorioPacotes: 'contrarius-scrivener-packages',
-			livro: 'operational-preview',
-			observacoes: 'Operational package generated from the Contrarius Scrivener Bridge modal.',
-			agora: new Date(),
+		const bridge = new ScrivenerBridgeService({
+			settings: this.settings,
+			saveSettings: () => this.saveSettings(),
 		});
-		const getFiltros = () => ({});
-		new ScrivenerBridgeModal(this.app, bridge, getContexto, getFiltros).open();
+		new ScrivenerBridgeModal(this.app, bridge).open();
 	}
 
 	/**

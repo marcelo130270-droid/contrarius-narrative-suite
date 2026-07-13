@@ -1,8 +1,9 @@
-import { App, Modal, Notice } from 'obsidian';
+import { App, Modal, Notice, Setting } from 'obsidian';
 import type { ScrivenerBridgeService } from './scrivener-bridge-service';
 import type { ContextoManifestoScrivenerOperacional } from './scrivener-package-manifest-factory';
 import type { FiltrosPayloadScrivener } from './scrivener-payload-filter-model';
 import type { DataAdapterEscritaScrivenerLike, DataAdapterLeituraScrivenerLike } from './scrivener-obsidian-write-adapter';
+import { FILTROS_PAYLOAD_SCRIVENER_VAZIOS, estadoFiltrosPayloadScrivenerParaFiltros } from './scrivener-payload-filter-settings-model';
 
 export class ScrivenerBridgeModal extends Modal {
   private statusEl: HTMLElement | null = null;
@@ -11,10 +12,23 @@ export class ScrivenerBridgeModal extends Modal {
   constructor(
     app: App,
     private readonly bridge: ScrivenerBridgeService,
-    private readonly getContexto: () => ContextoManifestoScrivenerOperacional,
-    private readonly getFiltros: () => FiltrosPayloadScrivener,
   ) {
     super(app);
+  }
+
+  private getContexto(): ContextoManifestoScrivenerOperacional {
+    return {
+      tipo: 'exportacao',
+      origemVault: this.app.vault.getName(),
+      diretorioPacotes: 'contrarius-scrivener-packages',
+      livro: 'operational-preview',
+      observacoes: 'Operational package generated from the Contrarius Scrivener Bridge modal.',
+      agora: new Date(),
+    };
+  }
+
+  private getFiltros(): FiltrosPayloadScrivener {
+    return estadoFiltrosPayloadScrivenerParaFiltros(FILTROS_PAYLOAD_SCRIVENER_VAZIOS);
   }
 
   onOpen(): void {
