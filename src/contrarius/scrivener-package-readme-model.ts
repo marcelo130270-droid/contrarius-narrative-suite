@@ -86,6 +86,8 @@ export function criarReadmePacoteScrivener(
 
     linhas.push('# Contrarius Scrivener package');
     linhas.push('');
+    linhas.push('[Scrivener import](scrivener-import.md)');
+    linhas.push('');
     linhas.push('## Manifest');
     linhas.push('');
     linhas.push(`- **Package id:** ${manifesto.id}`);

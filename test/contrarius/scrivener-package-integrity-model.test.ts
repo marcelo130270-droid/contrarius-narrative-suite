@@ -50,7 +50,7 @@ describe('scrivener-package-integrity-model', () => {
             expect(resultado.achados).toHaveLength(0);
             expect(resultado.erros).toBe(0);
             expect(resultado.avisos).toBe(0);
-            expect(resultado.totalArquivos).toBe(4);
+            expect(resultado.totalArquivos).toBe(5);
             expect(resultado.totalItensPayload).toBe(0);
             expect(resultado.totalArquivosItens).toBe(0);
         });
