@@ -1573,19 +1573,7 @@ export default class StorytellerSuitePlugin extends Plugin {
 		}).addClass('storyteller-suite-template-ribbon');
 
 		// Add ribbon icon for Scrivener Bridge
-		this.addRibbonIcon('file-output', 'Contrarius Scrivener Bridge', () => {
-			const bridge = new ScrivenerBridgeService(this);
-			const getContexto = () => ({
-				tipo: 'exportacao' as const,
-				origemVault: this.app.vault.getName(),
-				diretorioPacotes: 'contrarius-scrivener-packages',
-				livro: 'operational-preview',
-				observacoes: 'Operational package generated from the Contrarius Scrivener Bridge modal.',
-				agora: new Date(),
-			});
-			const getFiltros = () => ({});
-			new ScrivenerBridgeModal(this.app, bridge, getContexto, getFiltros).open();
-		});
+		this.addRibbonIcon('file-output', 'Contrarius Scrivener Bridge', () => this.openScrivenerBridgeModal());
 
 		// Register command palette commands
 		this.registerCommands();
@@ -3430,20 +3418,22 @@ export default class StorytellerSuitePlugin extends Plugin {
 		this.addCommand({
 			id: 'contrarius-open-scrivener-bridge',
 			name: 'Contrarius: Open Scrivener Bridge',
-			callback: () => {
-				const bridge = new ScrivenerBridgeService(this);
-				const getContexto = () => ({
-					tipo: 'exportacao' as const,
-					origemVault: this.app.vault.getName(),
-					diretorioPacotes: 'contrarius-scrivener-packages',
-					livro: 'operational-preview',
-					observacoes: 'Operational package generated from the Contrarius Scrivener Bridge modal.',
-					agora: new Date(),
-				});
-				const getFiltros = () => ({});
-				new ScrivenerBridgeModal(this.app, bridge, getContexto, getFiltros).open();
-			}
+			callback: () => this.openScrivenerBridgeModal(),
 		});
+	}
+
+	openScrivenerBridgeModal(): void {
+		const bridge = new ScrivenerBridgeService(this);
+		const getContexto = () => ({
+			tipo: 'exportacao' as const,
+			origemVault: this.app.vault.getName(),
+			diretorioPacotes: 'contrarius-scrivener-packages',
+			livro: 'operational-preview',
+			observacoes: 'Operational package generated from the Contrarius Scrivener Bridge modal.',
+			agora: new Date(),
+		});
+		const getFiltros = () => ({});
+		new ScrivenerBridgeModal(this.app, bridge, getContexto, getFiltros).open();
 	}
 
 	/**
