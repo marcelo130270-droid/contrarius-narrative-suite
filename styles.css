@@ -11874,3 +11874,20 @@ body.mod-rtl .storyteller-group-members {
 .contrarius-dashboard-caminho:hover {
   text-decoration: underline;
 }
+
+.contrarius-dashboard-visoes {
+  margin-top: var(--size-4-4);
+}
+
+.contrarius-dashboard-visao-grupo {
+  margin-bottom: var(--size-4-2);
+}
+
+.contrarius-dashboard-visao-grupo summary {
+  cursor: pointer;
+  font-weight: var(--font-weight-medium);
+}
+
+.contrarius-dashboard-visao-grupo ul {
+  margin: var(--size-4-1) 0 0 var(--size-4-4);
+}

@@ -3,7 +3,14 @@ import StorytellerSuitePlugin from '../main';
 import { indexarVaultContrarius, type IndiceContrarius } from '../contrarius/indexer';
 import { validarIndiceContrarius } from '../contrarius/validator';
 import { classificarColecaoContrariusPorCaminho } from '../contrarius/reader';
-import type { AlertaContrarius, SeveridadeAlertaContrarius, TipoColecaoContrarius } from '../contrarius/types';
+import type {
+  AlertaContrarius,
+  Evento,
+  Lugar,
+  Retrovida,
+  SeveridadeAlertaContrarius,
+  TipoColecaoContrarius,
+} from '../contrarius/types';
 
 export const VIEW_TYPE_CONTRARIUS_DASHBOARD = 'contrarius-narrative-suite-dashboard';
 
@@ -11,6 +18,22 @@ const ORDEM_SEVERIDADE: SeveridadeAlertaContrarius[] = ['erro', 'aviso', 'info']
 const TODAS_SEVERIDADES: SeveridadeAlertaContrarius[] = ['erro', 'aviso', 'info'];
 const COLECOES_FILTRAVEIS: TipoColecaoContrarius[] = ['consciencias', 'retrovidas', 'eventos', 'lugares', 'relacoes'];
 const LIMITE_ALERTAS_EXIBIDOS = 50;
+
+type DimensaoVisao = 'livro' | 'periodo' | 'nucleoGeo';
+
+const ROTULO_DIMENSAO: Record<DimensaoVisao, string> = {
+  livro: 'Livro',
+  periodo: 'Período',
+  nucleoGeo: 'Núcleo geográfico',
+};
+
+function rotuloEntidade(item: Retrovida | Evento | Lugar): string {
+  if ('titulo' in item && item.titulo) return item.titulo;
+  if ('nomes' in item && item.nomes && item.nomes.length > 0) return item.nomes[0];
+  if ('nome_atual' in item && item.nome_atual) return item.nome_atual;
+  const segmento = item.path.split('/').pop() ?? item.path;
+  return segmento.endsWith('.md') ? segmento.slice(0, -3) : segmento;
+}
 
 const ROTULO_COLECAO: Record<TipoColecaoContrarius, string> = {
   consciencias: 'Consciências',
@@ -47,6 +70,7 @@ export class ContrariusDashboardView extends ItemView {
   private alertas: AlertaContrarius[] = [];
   private filtroSeveridades: Set<SeveridadeAlertaContrarius> = new Set(TODAS_SEVERIDADES);
   private filtroColecoes: Set<TipoColecaoContrarius> = new Set(COLECOES_FILTRAVEIS);
+  private dimensaoVisao: DimensaoVisao = 'livro';
 
   constructor(leaf: WorkspaceLeaf, plugin: StorytellerSuitePlugin) {
     super(leaf);
@@ -209,6 +233,45 @@ export class ContrariusDashboardView extends ItemView {
       secaoAlertas.createEl('p', {
         text: `... e mais ${alertasFiltrados.length - LIMITE_ALERTAS_EXIBIDOS} alerta(s). Use "Copiar relatório" para ver a lista completa.`,
       });
+    }
+
+    this.renderizarVisoes(container, indice);
+  }
+
+  private renderizarVisoes(container: HTMLElement, indice: IndiceContrarius): void {
+    const secaoVisoes = container.createDiv({ cls: 'contrarius-dashboard-visoes' });
+    secaoVisoes.createEl('h3', { text: 'Visões narrativas' });
+
+    const seletor = secaoVisoes.createEl('select');
+    for (const dimensao of Object.keys(ROTULO_DIMENSAO) as DimensaoVisao[]) {
+      const opcao = seletor.createEl('option', { text: ROTULO_DIMENSAO[dimensao], value: dimensao });
+      if (dimensao === this.dimensaoVisao) opcao.selected = true;
+    }
+    seletor.addEventListener('change', () => {
+      this.dimensaoVisao = seletor.value as DimensaoVisao;
+      this.renderizar();
+    });
+
+    const mapa =
+      this.dimensaoVisao === 'livro' ? indice.porLivro : this.dimensaoVisao === 'periodo' ? indice.porPeriodo : indice.porNucleoGeo;
+
+    if (mapa.size === 0) {
+      secaoVisoes.createEl('p', { text: 'Nenhum dado para esta visão.' });
+      return;
+    }
+
+    const chaves = [...mapa.keys()].sort((a, b) => a.localeCompare(b));
+    for (const chave of chaves) {
+      const itens = mapa.get(chave) ?? [];
+      const detalhes = secaoVisoes.createEl('details', { cls: 'contrarius-dashboard-visao-grupo' });
+      detalhes.createEl('summary', { text: `${chave} (${itens.length})` });
+      const lista = detalhes.createEl('ul');
+      const itensOrdenados = [...itens].sort((a, b) => rotuloEntidade(a).localeCompare(rotuloEntidade(b)));
+      for (const item of itensOrdenados) {
+        const li = lista.createEl('li');
+        const link = li.createEl('code', { text: rotuloEntidade(item), cls: 'contrarius-dashboard-caminho' });
+        link.addEventListener('click', () => void this.abrirNota(item.path));
+      }
     }
   }
 
