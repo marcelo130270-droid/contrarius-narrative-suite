@@ -5,6 +5,33 @@ import type { ContextoManifestoScrivenerOperacional } from './scrivener-package-
 import type { FiltrosPayloadScrivener } from './scrivener-payload-filter-model';
 import type { DataAdapterEscritaScrivenerLike, DataAdapterLeituraScrivenerLike } from './scrivener-obsidian-write-adapter';
 import { FILTROS_PAYLOAD_SCRIVENER_VAZIOS, estadoFiltrosPayloadScrivenerParaFiltros } from './scrivener-payload-filter-settings-model';
+import {
+    MENSAGEM_PACOTE_NAO_ENCONTRADO,
+    verificarPacoteScrivenerMaisRecente,
+} from './scrivener-latest-package-verification-model';
+import type { EntradaArquivoPacoteScrivener } from './scrivener-latest-package-verification-model';
+
+interface DataAdapterListagemScrivenerLike {
+    list(caminho: string): Promise<{ files: string[]; folders: string[] }>;
+    exists(caminho: string): Promise<boolean>;
+    read(caminho: string): Promise<string>;
+}
+
+const DIRETORIO_PACOTES = 'contrarius-scrivener-packages';
+
+const ARQUIVOS_OBRIGATORIOS_VERIFICACAO = [
+    'manifest.json',
+    'payload/index.json',
+    'README.md',
+    'integrity/report.json',
+    'scrivener-import.md',
+    'scrivener/index.md',
+];
+
+const ARQUIVOS_OPCIONAIS_VERIFICACAO = [
+    'scrivener/timeline/eventos.md',
+    'scrivener/timeline/cronologia.md',
+];
 
 export class ScrivenerBridgeModal extends Modal {
   private statusEl: HTMLElement | null = null;
@@ -202,35 +229,81 @@ export class ScrivenerBridgeModal extends Modal {
   }
 
   private async onVerify(): Promise<void> {
-    if (!this.lastPlanoEscrita) {
-      this.setStatus('No write session found.');
-      this.setResult(['Run Write controlled package first.']);
-      new Notice('Run Write controlled package first.');
-      return;
-    }
     this.setStatus('Verifying package write...');
     this.setResult([]);
+    await this.verifyLatest();
+  }
+
+  private async verifyLatest(): Promise<void> {
+    const adapter = this.app.vault.adapter as unknown as DataAdapterListagemScrivenerLike;
+
+    let listagemPacotes: { files: string[]; folders: string[] };
     try {
-      const adapter = this.app.vault.adapter as unknown as DataAdapterLeituraScrivenerLike;
-      const { verificacao } = await this.bridge.verificarPlanoEscritaPacoteScrivenerObsidian(
-        this.lastPlanoEscrita,
-        adapter,
-      );
-      this.setStatus(`Verification: ${verificacao.nivel}`);
-      this.setResult([
-        `Verification level: ${verificacao.nivel}`,
-        `Valid: ${verificacao.valido}`,
-        `Total operations: ${verificacao.totalOperacoes}`,
-        `Files verified: ${verificacao.arquivosVerificados}`,
-        `Files missing: ${verificacao.arquivosAusentes}`,
-        `Files divergent: ${verificacao.arquivosDivergentes}`,
-        `Errors: ${verificacao.erros}`,
-        `Warnings: ${verificacao.avisos}`,
-      ]);
-      new Notice(`Package verification: ${verificacao.nivel}`);
-    } catch (err) {
-      this.setStatus('Error during verification.');
-      new Notice(`Verification error: ${err}`);
+      listagemPacotes = await adapter.list(DIRETORIO_PACOTES);
+    } catch {
+      this.setStatus('No Scrivener package found.');
+      this.setResult([MENSAGEM_PACOTE_NAO_ENCONTRADO]);
+      new Notice(MENSAGEM_PACOTE_NAO_ENCONTRADO);
+      return;
     }
+
+    const subpastas = [...listagemPacotes.folders].sort().reverse();
+    if (subpastas.length === 0) {
+      this.setStatus('No Scrivener package found.');
+      this.setResult([MENSAGEM_PACOTE_NAO_ENCONTRADO]);
+      new Notice(MENSAGEM_PACOTE_NAO_ENCONTRADO);
+      return;
+    }
+
+    const caminhoPacote = subpastas[0];
+
+    const arquivos: EntradaArquivoPacoteScrivener[] = [];
+    for (const relativo of [...ARQUIVOS_OBRIGATORIOS_VERIFICACAO, ...ARQUIVOS_OPCIONAIS_VERIFICACAO]) {
+      const caminhoCompleto = `${caminhoPacote}/${relativo}`;
+      try {
+        const existe = await adapter.exists(caminhoCompleto);
+        if (!existe) {
+          arquivos.push({ caminhoRelativo: relativo, conteudo: null });
+        } else {
+          const conteudo = await adapter.read(caminhoCompleto);
+          arquivos.push({ caminhoRelativo: relativo, conteudo });
+        }
+      } catch {
+        arquivos.push({ caminhoRelativo: relativo, conteudo: null });
+      }
+    }
+
+    let arquivosDossier: string[] = [];
+    try {
+      const caminhosDossier = `${caminhoPacote}/scrivener/dossier`;
+      const listaDossier = await adapter.list(caminhosDossier);
+      arquivosDossier = listaDossier.files.filter(f => f.endsWith('.md'));
+    } catch {
+      // dossier directory absent — not an error
+    }
+
+    const resultado = verificarPacoteScrivenerMaisRecente({
+      caminhoPacote,
+      arquivos,
+      arquivosDossier,
+    });
+
+    this.setStatus(`Verification: ${resultado.nivel}`);
+    this.setResult([
+      `Latest package: ${resultado.caminhoPacote}`,
+      `Verification: ${resultado.nivel}`,
+      `Required files checked: ${resultado.arquivosObrigatoriosVerificados}`,
+      `Missing files: ${resultado.arquivosAusentes}`,
+      `Dossier files: ${resultado.dossiersEncontrados}`,
+      ...(resultado.totalPayloadItens !== null
+        ? [`Payload items: ${resultado.totalPayloadItens}`]
+        : []),
+      ...(resultado.arquivosOpcionaisEncontrados.length > 0
+        ? [`Optional files: ${resultado.arquivosOpcionaisEncontrados.join(', ')}`]
+        : []),
+      ...resultado.erros,
+      ...resultado.avisos,
+    ]);
+    new Notice(`Package verification: ${resultado.nivel}`);
   }
 }
