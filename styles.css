@@ -11831,3 +11831,46 @@ body.mod-rtl .storyteller-group-members {
   border-left: 3px solid var(--text-muted);
   padding-left: var(--size-4-2);
 }
+
+.contrarius-dashboard-filtros {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-4-1);
+  margin: var(--size-4-2) 0;
+  padding: var(--size-4-2);
+  border-radius: var(--radius-m);
+  background: var(--background-secondary);
+}
+
+.contrarius-dashboard-filtro-grupo {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--size-4-2);
+}
+
+.contrarius-dashboard-filtro-rotulo {
+  font-weight: var(--font-weight-bold);
+  color: var(--text-muted);
+}
+
+.contrarius-dashboard-filtro-item {
+  display: flex;
+  align-items: center;
+  gap: var(--size-4-1);
+  cursor: pointer;
+}
+
+.contrarius-dashboard-contagem {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}
+
+.contrarius-dashboard-caminho {
+  cursor: pointer;
+  color: var(--text-accent);
+}
+
+.contrarius-dashboard-caminho:hover {
+  text-decoration: underline;
+}

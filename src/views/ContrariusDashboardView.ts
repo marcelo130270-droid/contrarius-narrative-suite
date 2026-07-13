@@ -1,13 +1,27 @@
-import { ItemView, Notice, WorkspaceLeaf } from 'obsidian';
+import { ItemView, Notice, TFile, WorkspaceLeaf } from 'obsidian';
 import StorytellerSuitePlugin from '../main';
 import { indexarVaultContrarius, type IndiceContrarius } from '../contrarius/indexer';
 import { validarIndiceContrarius } from '../contrarius/validator';
-import type { AlertaContrarius, SeveridadeAlertaContrarius } from '../contrarius/types';
+import { classificarColecaoContrariusPorCaminho } from '../contrarius/reader';
+import type { AlertaContrarius, SeveridadeAlertaContrarius, TipoColecaoContrarius } from '../contrarius/types';
 
 export const VIEW_TYPE_CONTRARIUS_DASHBOARD = 'contrarius-narrative-suite-dashboard';
 
 const ORDEM_SEVERIDADE: SeveridadeAlertaContrarius[] = ['erro', 'aviso', 'info'];
+const TODAS_SEVERIDADES: SeveridadeAlertaContrarius[] = ['erro', 'aviso', 'info'];
+const COLECOES_FILTRAVEIS: TipoColecaoContrarius[] = ['consciencias', 'retrovidas', 'eventos', 'lugares', 'relacoes'];
 const LIMITE_ALERTAS_EXIBIDOS = 50;
+
+const ROTULO_COLECAO: Record<TipoColecaoContrarius, string> = {
+  consciencias: 'Consciências',
+  retrovidas: 'Retrovidas',
+  eventos: 'Eventos',
+  lugares: 'Lugares',
+  relacoes: 'Relações',
+  grupos: 'Grupos',
+  objetos: 'Objetos',
+  notas: 'Notas',
+};
 
 function montarRelatorioTexto(indice: IndiceContrarius, alertas: AlertaContrarius[]): string {
   const linhas: string[] = [];
@@ -31,6 +45,8 @@ export class ContrariusDashboardView extends ItemView {
   plugin: StorytellerSuitePlugin;
   private indice: IndiceContrarius | null = null;
   private alertas: AlertaContrarius[] = [];
+  private filtroSeveridades: Set<SeveridadeAlertaContrarius> = new Set(TODAS_SEVERIDADES);
+  private filtroColecoes: Set<TipoColecaoContrarius> = new Set(COLECOES_FILTRAVEIS);
 
   constructor(leaf: WorkspaceLeaf, plugin: StorytellerSuitePlugin) {
     super(leaf);
@@ -75,6 +91,25 @@ export class ContrariusDashboardView extends ItemView {
     });
   }
 
+  private alertasFiltrados(): AlertaContrarius[] {
+    return this.alertas.filter((alerta) => {
+      if (!this.filtroSeveridades.has(alerta.severidade)) return false;
+      const colecao = classificarColecaoContrariusPorCaminho(alerta.path);
+      if (colecao === null) return true;
+      if (!COLECOES_FILTRAVEIS.includes(colecao)) return true;
+      return this.filtroColecoes.has(colecao);
+    });
+  }
+
+  private async abrirNota(path: string): Promise<void> {
+    const arquivo = this.app.vault.getAbstractFileByPath(path);
+    if (arquivo instanceof TFile) {
+      await this.app.workspace.getLeaf(false).openFile(arquivo);
+    } else {
+      new Notice(`Não encontrei a nota: ${path}`);
+    }
+  }
+
   private renderizar(): void {
     const indice = this.indice;
     if (!indice) return;
@@ -92,7 +127,7 @@ export class ContrariusDashboardView extends ItemView {
 
     const botaoCopiar = botoes.createEl('button', { text: 'Copiar relatório' });
     botaoCopiar.addEventListener('click', () => {
-      const texto = montarRelatorioTexto(indice, this.alertas);
+      const texto = montarRelatorioTexto(indice, this.alertasFiltrados());
       void navigator.clipboard.writeText(texto).then(
         () => new Notice('Relatório Contrarius copiado.'),
         () => new Notice('Não foi possível copiar o relatório.'),
@@ -114,14 +149,50 @@ export class ContrariusDashboardView extends ItemView {
     }
 
     const secaoAlertas = container.createDiv({ cls: 'contrarius-dashboard-alertas' });
-    secaoAlertas.createEl('h3', { text: `Alertas (${this.alertas.length})` });
+    secaoAlertas.createEl('h3', { text: 'Alertas' });
 
-    if (this.alertas.length === 0) {
-      secaoAlertas.createEl('p', { text: 'Nenhum alerta encontrado.' });
+    const filtros = secaoAlertas.createDiv({ cls: 'contrarius-dashboard-filtros' });
+
+    const grupoSeveridade = filtros.createDiv({ cls: 'contrarius-dashboard-filtro-grupo' });
+    grupoSeveridade.createEl('span', { text: 'Severidade: ', cls: 'contrarius-dashboard-filtro-rotulo' });
+    for (const severidade of TODAS_SEVERIDADES) {
+      const label = grupoSeveridade.createEl('label', { cls: 'contrarius-dashboard-filtro-item' });
+      const checkbox = label.createEl('input', { type: 'checkbox' });
+      checkbox.checked = this.filtroSeveridades.has(severidade);
+      checkbox.addEventListener('change', () => {
+        if (checkbox.checked) this.filtroSeveridades.add(severidade);
+        else this.filtroSeveridades.delete(severidade);
+        this.renderizar();
+      });
+      label.createSpan({ text: severidade });
+    }
+
+    const grupoColecao = filtros.createDiv({ cls: 'contrarius-dashboard-filtro-grupo' });
+    grupoColecao.createEl('span', { text: 'Tipo: ', cls: 'contrarius-dashboard-filtro-rotulo' });
+    for (const colecao of COLECOES_FILTRAVEIS) {
+      const label = grupoColecao.createEl('label', { cls: 'contrarius-dashboard-filtro-item' });
+      const checkbox = label.createEl('input', { type: 'checkbox' });
+      checkbox.checked = this.filtroColecoes.has(colecao);
+      checkbox.addEventListener('change', () => {
+        if (checkbox.checked) this.filtroColecoes.add(colecao);
+        else this.filtroColecoes.delete(colecao);
+        this.renderizar();
+      });
+      label.createSpan({ text: ROTULO_COLECAO[colecao] });
+    }
+
+    const alertasFiltrados = this.alertasFiltrados();
+    secaoAlertas.createEl('p', {
+      cls: 'contrarius-dashboard-contagem',
+      text: `${alertasFiltrados.length} de ${this.alertas.length} alerta(s) exibido(s).`,
+    });
+
+    if (alertasFiltrados.length === 0) {
+      secaoAlertas.createEl('p', { text: 'Nenhum alerta com os filtros atuais.' });
       return;
     }
 
-    const alertasOrdenados = [...this.alertas].sort(
+    const alertasOrdenados = [...alertasFiltrados].sort(
       (a, b) => ORDEM_SEVERIDADE.indexOf(a.severidade) - ORDEM_SEVERIDADE.indexOf(b.severidade),
     );
 
@@ -129,13 +200,14 @@ export class ContrariusDashboardView extends ItemView {
     for (const alerta of alertasOrdenados.slice(0, LIMITE_ALERTAS_EXIBIDOS)) {
       const item = lista.createEl('li', { cls: `contrarius-alerta-${alerta.severidade}` });
       const campo = alerta.campo ? ` [${alerta.campo}]` : '';
-      item.createEl('code', { text: alerta.path });
+      const link = item.createEl('code', { text: alerta.path, cls: 'contrarius-dashboard-caminho' });
+      link.addEventListener('click', () => void this.abrirNota(alerta.path));
       item.createSpan({ text: `${campo}: ${alerta.mensagem}` });
     }
 
-    if (this.alertas.length > LIMITE_ALERTAS_EXIBIDOS) {
+    if (alertasFiltrados.length > LIMITE_ALERTAS_EXIBIDOS) {
       secaoAlertas.createEl('p', {
-        text: `... e mais ${this.alertas.length - LIMITE_ALERTAS_EXIBIDOS} alerta(s). Use "Copiar relatório" para ver a lista completa.`,
+        text: `... e mais ${alertasFiltrados.length - LIMITE_ALERTAS_EXIBIDOS} alerta(s). Use "Copiar relatório" para ver a lista completa.`,
       });
     }
   }
