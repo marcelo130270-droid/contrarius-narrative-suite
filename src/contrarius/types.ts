@@ -62,6 +62,11 @@ export interface Evento {
   mov_historico?: string[];
   eventos_anteriores?: string[];
   eventos_posteriores?: string[];
+  // Ordem narrativa (ordem em que o leitor encontra a cena) vs. cronológica (data histórica) — ver Etapa 10.
+  ano_ordem?: string;
+  data_inicio?: string;
+  data_fim?: string;
+  data_textual?: string;
   metadata: Record<string, unknown>;
 }
 

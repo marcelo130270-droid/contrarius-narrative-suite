@@ -13,6 +13,15 @@ export function getStrOuNumero(fm: Record<string, unknown>, chave: string): stri
   return undefined;
 }
 
+// Datas YAML sem aspas (ex. `data_inicio: 1229-09-10`) podem ser parseadas como Date pelo parser de
+// frontmatter, não como string. Tolerar os dois formatos.
+export function getStrData(fm: Record<string, unknown>, chave: string): string | undefined {
+  const val = fm[chave];
+  if (typeof val === 'string' && val.trim()) return val.trim();
+  if (val instanceof Date && !Number.isNaN(val.getTime())) return val.toISOString().slice(0, 10);
+  return getStrOuNumero(fm, chave);
+}
+
 export function getStrArray(fm: Record<string, unknown>, chave: string): string[] | undefined {
   const val = fm[chave];
   if (Array.isArray(val)) {

@@ -11891,3 +11891,20 @@ body.mod-rtl .storyteller-group-members {
 .contrarius-dashboard-visao-grupo ul {
   margin: var(--size-4-1) 0 0 var(--size-4-4);
 }
+
+.contrarius-dashboard-timeline {
+  margin-top: var(--size-4-4);
+}
+
+.contrarius-dashboard-timeline-tabela {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: var(--size-4-2);
+}
+
+.contrarius-dashboard-timeline-tabela th,
+.contrarius-dashboard-timeline-tabela td {
+  text-align: left;
+  padding: var(--size-4-1) var(--size-4-2);
+  border-bottom: 1px solid var(--background-modifier-border);
+}

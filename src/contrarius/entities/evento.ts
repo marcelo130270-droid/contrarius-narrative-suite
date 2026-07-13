@@ -1,5 +1,5 @@
 import type { AlertaContrarius, Evento, NotaContrariusBruta, ResultadoNormalizacao } from '../types';
-import { extrairMetadata, getStr, getStrArray, getWikiLinkArray } from './campos';
+import { extrairMetadata, getStr, getStrArray, getStrData, getStrOuNumero, getWikiLinkArray } from './campos';
 
 const CAMPOS_CONHECIDOS = [
   'codigo',
@@ -14,6 +14,10 @@ const CAMPOS_CONHECIDOS = [
   'mov_historico',
   'eventos_anteriores',
   'eventos_posteriores',
+  'ano_ordem',
+  'data_inicio',
+  'data_fim',
+  'data_textual',
 ] as const;
 
 export function normalizarEvento(nota: NotaContrariusBruta): ResultadoNormalizacao<Evento> {
@@ -44,6 +48,10 @@ export function normalizarEvento(nota: NotaContrariusBruta): ResultadoNormalizac
     mov_historico: getStrArray(fm, 'mov_historico'),
     eventos_anteriores: getWikiLinkArray(fm, 'eventos_anteriores'),
     eventos_posteriores: getWikiLinkArray(fm, 'eventos_posteriores'),
+    ano_ordem: getStrOuNumero(fm, 'ano_ordem'),
+    data_inicio: getStrData(fm, 'data_inicio'),
+    data_fim: getStrData(fm, 'data_fim'),
+    data_textual: getStr(fm, 'data_textual'),
     metadata: extrairMetadata(fm, CAMPOS_CONHECIDOS),
   };
 

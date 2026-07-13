@@ -35,6 +35,12 @@ function rotuloEntidade(item: Retrovida | Evento | Lugar): string {
   return segmento.endsWith('.md') ? segmento.slice(0, -3) : segmento;
 }
 
+type ModoTimeline = 'cronologica' | 'narrativa';
+
+function rotuloEvento(evento: Evento): string {
+  return evento.titulo || evento.codigo || rotuloEntidade(evento);
+}
+
 const ROTULO_COLECAO: Record<TipoColecaoContrarius, string> = {
   consciencias: 'Consciências',
   retrovidas: 'Retrovidas',
@@ -71,6 +77,7 @@ export class ContrariusDashboardView extends ItemView {
   private filtroSeveridades: Set<SeveridadeAlertaContrarius> = new Set(TODAS_SEVERIDADES);
   private filtroColecoes: Set<TipoColecaoContrarius> = new Set(COLECOES_FILTRAVEIS);
   private dimensaoVisao: DimensaoVisao = 'livro';
+  private modoTimeline: ModoTimeline = 'cronologica';
 
   constructor(leaf: WorkspaceLeaf, plugin: StorytellerSuitePlugin) {
     super(leaf);
@@ -236,6 +243,7 @@ export class ContrariusDashboardView extends ItemView {
     }
 
     this.renderizarVisoes(container, indice);
+    this.renderizarTimeline(container, indice);
   }
 
   private renderizarVisoes(container: HTMLElement, indice: IndiceContrarius): void {
@@ -272,6 +280,58 @@ export class ContrariusDashboardView extends ItemView {
         const link = li.createEl('code', { text: rotuloEntidade(item), cls: 'contrarius-dashboard-caminho' });
         link.addEventListener('click', () => void this.abrirNota(item.path));
       }
+    }
+  }
+
+  private renderizarTimeline(container: HTMLElement, indice: IndiceContrarius): void {
+    const secao = container.createDiv({ cls: 'contrarius-dashboard-timeline' });
+    secao.createEl('h3', { text: 'Timeline' });
+
+    const seletor = secao.createEl('select');
+    const opcaoCronologica = seletor.createEl('option', { text: 'Ordem cronológica (data_inicio)', value: 'cronologica' });
+    const opcaoNarrativa = seletor.createEl('option', { text: 'Ordem narrativa (ano_ordem)', value: 'narrativa' });
+    (this.modoTimeline === 'cronologica' ? opcaoCronologica : opcaoNarrativa).selected = true;
+    seletor.addEventListener('change', () => {
+      this.modoTimeline = seletor.value as ModoTimeline;
+      this.renderizar();
+    });
+
+    const chaveOrdenacao = this.modoTimeline === 'cronologica' ? 'data_inicio' : 'ano_ordem';
+    const comData = indice.eventos.filter((e) => e[chaveOrdenacao]);
+    const semData = indice.eventos.filter((e) => !e[chaveOrdenacao]);
+
+    comData.sort((a, b) => {
+      const va = a[chaveOrdenacao] as string;
+      const vb = b[chaveOrdenacao] as string;
+      const na = Number(va);
+      const nb = Number(vb);
+      if (!Number.isNaN(na) && !Number.isNaN(nb)) return na - nb;
+      return va.localeCompare(vb);
+    });
+
+    if (comData.length === 0) {
+      secao.createEl('p', { text: 'Nenhum evento com dados suficientes para esta ordem.' });
+    } else {
+      const tabela = secao.createEl('table', { cls: 'contrarius-dashboard-timeline-tabela' });
+      const cabecalho = tabela.createEl('tr');
+      cabecalho.createEl('th', { text: this.modoTimeline === 'cronologica' ? 'Data' : 'Ordem' });
+      cabecalho.createEl('th', { text: 'Evento' });
+      cabecalho.createEl('th', { text: 'Livro' });
+      for (const evento of comData) {
+        const linha = tabela.createEl('tr');
+        linha.createEl('td', { text: (evento[chaveOrdenacao] as string) ?? '' });
+        const celulaEvento = linha.createEl('td');
+        const link = celulaEvento.createEl('code', { text: rotuloEvento(evento), cls: 'contrarius-dashboard-caminho' });
+        link.addEventListener('click', () => void this.abrirNota(evento.path));
+        linha.createEl('td', { text: evento.livro ?? '' });
+      }
+    }
+
+    if (semData.length > 0) {
+      secao.createEl('p', {
+        cls: 'contrarius-dashboard-contagem',
+        text: `${semData.length} evento(s) sem "${chaveOrdenacao}" — não entram nesta ordenação.`,
+      });
     }
   }
 
