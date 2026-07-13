@@ -90,3 +90,17 @@ export interface ContrariusIndex {
   lugares: Lugar[];
   relacoes: Relacao[];
 }
+
+export type SeveridadeAlertaContrarius = 'erro' | 'aviso' | 'info';
+
+export interface AlertaContrarius {
+  severidade: SeveridadeAlertaContrarius;
+  path: string;
+  campo?: string;
+  mensagem: string;
+}
+
+export interface ResultadoNormalizacao<T> {
+  entidade: T;
+  alertas: AlertaContrarius[];
+}
