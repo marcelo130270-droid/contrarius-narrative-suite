@@ -11764,3 +11764,70 @@ body.mod-rtl .storyteller-group-members {
 .template-link-chip-remove:hover {
   color: var(--text-error);
 }
+
+/* Contrarius Narrative Suite — Dashboard */
+.contrarius-dashboard-view {
+  padding: var(--size-4-4);
+}
+
+.contrarius-dashboard-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--size-4-2);
+}
+
+.contrarius-dashboard-botoes {
+  display: flex;
+  gap: var(--size-4-2);
+}
+
+.contrarius-dashboard-resumo {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--size-4-4);
+  margin: var(--size-4-4) 0;
+}
+
+.contrarius-dashboard-resumo-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 96px;
+  padding: var(--size-4-2);
+  border-radius: var(--radius-m);
+  background: var(--background-secondary);
+}
+
+.contrarius-dashboard-resumo-item strong {
+  font-size: var(--font-ui-large);
+}
+
+.contrarius-dashboard-alertas ul {
+  list-style: none;
+  padding-left: 0;
+}
+
+.contrarius-dashboard-alertas li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--size-4-2);
+  padding: var(--size-4-1) 0;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.contrarius-alerta-erro {
+  border-left: 3px solid var(--text-error);
+  padding-left: var(--size-4-2);
+}
+
+.contrarius-alerta-aviso {
+  border-left: 3px solid var(--text-warning);
+  padding-left: var(--size-4-2);
+}
+
+.contrarius-alerta-info {
+  border-left: 3px solid var(--text-muted);
+  padding-left: var(--size-4-2);
+}

@@ -60,6 +60,7 @@ import { MapView, VIEW_TYPE_MAP } from './views/MapView';
 import { WritingPanelView, VIEW_TYPE_WRITING_PANEL } from './views/WritingPanelView';
 import { CampaignView, VIEW_TYPE_CAMPAIGN } from './views/CampaignView';
 import { SceneGraphView, VIEW_TYPE_SCENE_GRAPH } from './views/SceneGraphView';
+import { ContrariusDashboardView, VIEW_TYPE_CONTRARIUS_DASHBOARD } from './views/ContrariusDashboardView';
 import { StorytellerGuideModal } from './modals/StorytellerGuideModal';
 // DEPRECATED: Map functionality has been deprecated
 // import { MapEditorView, VIEW_TYPE_MAP_EDITOR } from './views/MapEditorView';
@@ -1547,6 +1548,9 @@ export default class StorytellerSuitePlugin extends Plugin {
 		this.registerView(VIEW_TYPE_CAMPAIGN, (leaf) => new CampaignView(leaf, this));
 		this.registerView(VIEW_TYPE_SCENE_GRAPH, (leaf) => new SceneGraphView(leaf, this));
 
+		// Register the Contrarius dashboard view (reader/indexer/validator report)
+		this.registerView(VIEW_TYPE_CONTRARIUS_DASHBOARD, (leaf) => new ContrariusDashboardView(leaf, this));
+
 		// DEPRECATED: Map functionality has been deprecated
 		// Register the map editor view for full-screen map editing
 		// this.registerView(
@@ -2253,6 +2257,15 @@ export default class StorytellerSuitePlugin extends Plugin {
 			name: 'Open dashboard',
 			callback: () => {
 				void this.activateView();
+			}
+		});
+
+		// Contrarius dashboard command (reader/indexer/validator report)
+		this.addCommand({
+			id: 'contrarius-open-dashboard',
+			name: 'Contrarius: Open Dashboard',
+			callback: () => {
+				void this.activateContrariusDashboardView();
 			}
 		});
 
@@ -3532,6 +3545,28 @@ export default class StorytellerSuitePlugin extends Plugin {
 	 * Activate or focus the timeline panel view in the main editor area
 	 * Creates a new view as a tab if none exists, otherwise focuses existing view
 	 */
+	async activateContrariusDashboardView() {
+		const { workspace } = this.app;
+
+		const existingLeaves = workspace.getLeavesOfType(VIEW_TYPE_CONTRARIUS_DASHBOARD);
+
+		if (existingLeaves.length > 0) {
+			void workspace.revealLeaf(existingLeaves[0]);
+			return;
+		}
+
+		const leaf = workspace.getLeaf('tab');
+		if (leaf) {
+			await leaf.setViewState({
+				type: VIEW_TYPE_CONTRARIUS_DASHBOARD,
+				active: true
+			});
+			void workspace.revealLeaf(leaf);
+		} else {
+			new Notice("Error opening Contrarius dashboard: Could not create workspace leaf.");
+		}
+	}
+
 	async activateTimelineView() {
 		const { workspace } = this.app;
 
