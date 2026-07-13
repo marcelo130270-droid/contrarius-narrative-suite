@@ -231,11 +231,29 @@ export class ScrivenerBridgeModal extends Modal {
   private async onVerify(): Promise<void> {
     this.setStatus('Verifying package write...');
     this.setResult([]);
-    await this.verifyLatest();
+    try {
+      await this.verifyLatest();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.setStatus('Verification: error');
+      this.setResult([
+        'Verification: error',
+        `Unexpected error: ${msg}`,
+      ]);
+    }
   }
 
   private async verifyLatest(): Promise<void> {
     const adapter = this.app.vault.adapter as unknown as DataAdapterListagemScrivenerLike;
+    const normalizarCaminho = (p: string) => p.replace(/\\/g, '/');
+
+    const pastaExiste = await adapter.exists(DIRETORIO_PACOTES);
+    if (!pastaExiste) {
+      this.setStatus('No Scrivener package found.');
+      this.setResult([MENSAGEM_PACOTE_NAO_ENCONTRADO]);
+      new Notice(MENSAGEM_PACOTE_NAO_ENCONTRADO);
+      return;
+    }
 
     let listagemPacotes: { files: string[]; folders: string[] };
     try {
@@ -247,7 +265,11 @@ export class ScrivenerBridgeModal extends Modal {
       return;
     }
 
-    const subpastas = [...listagemPacotes.folders].sort().reverse();
+    const subpastas = [...listagemPacotes.folders]
+      .map(normalizarCaminho)
+      .sort()
+      .reverse();
+
     if (subpastas.length === 0) {
       this.setStatus('No Scrivener package found.');
       this.setResult([MENSAGEM_PACOTE_NAO_ENCONTRADO]);
@@ -255,7 +277,8 @@ export class ScrivenerBridgeModal extends Modal {
       return;
     }
 
-    const caminhoPacote = subpastas[0];
+    const preferidas = subpastas.filter(p => p.includes('.scrivener-package'));
+    const caminhoPacote = (preferidas.length > 0 ? preferidas : subpastas)[0];
 
     const arquivos: EntradaArquivoPacoteScrivener[] = [];
     for (const relativo of [...ARQUIVOS_OBRIGATORIOS_VERIFICACAO, ...ARQUIVOS_OPCIONAIS_VERIFICACAO]) {
@@ -273,13 +296,20 @@ export class ScrivenerBridgeModal extends Modal {
       }
     }
 
+    const diagnosticsExtra: string[] = [];
+
     let arquivosDossier: string[] = [];
     try {
       const caminhosDossier = `${caminhoPacote}/scrivener/dossier`;
-      const listaDossier = await adapter.list(caminhosDossier);
-      arquivosDossier = listaDossier.files.filter(f => f.endsWith('.md'));
+      const dossierExiste = await adapter.exists(caminhosDossier);
+      if (dossierExiste) {
+        const listaDossier = await adapter.list(caminhosDossier);
+        arquivosDossier = listaDossier.files.filter(f => f.endsWith('.md'));
+      } else {
+        diagnosticsExtra.push('Dossier folder not found');
+      }
     } catch {
-      // dossier directory absent — not an error
+      diagnosticsExtra.push('Dossier folder not found');
     }
 
     const resultado = verificarPacoteScrivenerMaisRecente({
@@ -288,6 +318,8 @@ export class ScrivenerBridgeModal extends Modal {
       arquivosDossier,
     });
 
+    const todosDiagnostics = [...resultado.diagnostics, ...diagnosticsExtra];
+
     this.setStatus(`Verification: ${resultado.nivel}`);
     this.setResult([
       `Latest package: ${resultado.caminhoPacote}`,
@@ -295,14 +327,13 @@ export class ScrivenerBridgeModal extends Modal {
       `Required files checked: ${resultado.arquivosObrigatoriosVerificados}`,
       `Missing files: ${resultado.arquivosAusentes}`,
       `Dossier files: ${resultado.dossiersEncontrados}`,
-      ...(resultado.totalPayloadItens !== null
-        ? [`Payload items: ${resultado.totalPayloadItens}`]
-        : []),
+      `Payload items: ${resultado.totalPayloadItens !== null ? resultado.totalPayloadItens : 'unavailable'}`,
       ...(resultado.arquivosOpcionaisEncontrados.length > 0
         ? [`Optional files: ${resultado.arquivosOpcionaisEncontrados.join(', ')}`]
         : []),
-      ...resultado.erros,
-      ...resultado.avisos,
+      ...(todosDiagnostics.length > 0
+        ? ['Diagnostics:', ...todosDiagnostics]
+        : []),
     ]);
     new Notice(`Package verification: ${resultado.nivel}`);
   }

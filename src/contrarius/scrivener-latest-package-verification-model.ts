@@ -24,6 +24,7 @@ export interface ResultadoVerificacaoPacoteScrivenerMaisRecente {
     arquivosOpcionaisEncontrados: string[];
     erros: string[];
     avisos: string[];
+    diagnostics: string[];
 }
 
 const ARQUIVOS_OBRIGATORIOS = [
@@ -101,6 +102,8 @@ export function verificarPacoteScrivenerMaisRecente(
     const nivel: NivelVerificacaoPacoteScrivenerMaisRecente =
         erros.length > 0 ? 'error' : avisos.length > 0 ? 'warning' : 'ok';
 
+    const diagnostics: string[] = [...erros, ...avisos];
+
     return {
         caminhoPacote: input.caminhoPacote,
         nivel,
@@ -111,5 +114,6 @@ export function verificarPacoteScrivenerMaisRecente(
         arquivosOpcionaisEncontrados,
         erros,
         avisos,
+        diagnostics,
     };
 }

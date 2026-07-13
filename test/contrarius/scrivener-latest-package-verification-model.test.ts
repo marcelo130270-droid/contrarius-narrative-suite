@@ -131,7 +131,7 @@ describe('verificarPacoteScrivenerMaisRecente', () => {
         expect(resultado.totalPayloadItens).toBe(7);
     });
 
-    it('JSON inválido em manifest.json gera erro', () => {
+    it('JSON inválido em manifest.json gera erro e aparece em diagnostics como invalid JSON', () => {
         const arquivos = criarArquivosCompletos().map(a =>
             a.caminhoRelativo === 'manifest.json'
                 ? { caminhoRelativo: 'manifest.json', conteudo: 'not-valid{{{' }
@@ -141,9 +141,12 @@ describe('verificarPacoteScrivenerMaisRecente', () => {
 
         expect(resultado.nivel).toBe('error');
         expect(resultado.erros.some(e => e.includes('manifest.json'))).toBe(true);
+        expect(resultado.erros.some(e => e.toLowerCase().includes('invalid json'))).toBe(true);
+        expect(resultado.diagnostics.some(d => d.toLowerCase().includes('invalid json'))).toBe(true);
+        expect(resultado.diagnostics.some(d => d.includes('manifest.json'))).toBe(true);
     });
 
-    it('JSON inválido em integrity/report.json gera erro', () => {
+    it('JSON inválido em integrity/report.json gera erro em diagnostics como invalid JSON', () => {
         const arquivos = criarArquivosCompletos().map(a =>
             a.caminhoRelativo === 'integrity/report.json'
                 ? { caminhoRelativo: 'integrity/report.json', conteudo: 'invalid' }
@@ -153,6 +156,7 @@ describe('verificarPacoteScrivenerMaisRecente', () => {
 
         expect(resultado.nivel).toBe('error');
         expect(resultado.erros.some(e => e.includes('integrity/report.json'))).toBe(true);
+        expect(resultado.diagnostics.some(d => d.toLowerCase().includes('invalid json'))).toBe(true);
     });
 
     it('arquivos opcionais de timeline encontrados são listados', () => {
@@ -203,5 +207,42 @@ describe('verificarPacoteScrivenerMaisRecente', () => {
 
         expect(resultado).toBeDefined();
         expect(['ok', 'warning', 'error']).toContain(resultado.nivel);
+    });
+
+    it('campo diagnostics está presente e é array no resultado', () => {
+        const resultado = verificarPacoteScrivenerMaisRecente(criarInput(criarArquivosCompletos()));
+
+        expect(resultado.diagnostics).toBeDefined();
+        expect(Array.isArray(resultado.diagnostics)).toBe(true);
+    });
+
+    it('diagnostics agrega erros — pacote completo tem diagnostics vazio', () => {
+        const resultado = verificarPacoteScrivenerMaisRecente(criarInput(criarArquivosCompletos()));
+
+        expect(resultado.diagnostics).toHaveLength(0);
+    });
+
+    it('scrivener/index.md ausente aparece em diagnostics como missing', () => {
+        const arquivos = criarArquivosCompletos().map(a =>
+            a.caminhoRelativo === 'scrivener/index.md'
+                ? { caminhoRelativo: 'scrivener/index.md', conteudo: null }
+                : a,
+        );
+        const resultado = verificarPacoteScrivenerMaisRecente(criarInput(arquivos));
+
+        expect(resultado.diagnostics.some(d => d.includes('scrivener/index.md'))).toBe(true);
+        expect(resultado.diagnostics.some(d => d.toLowerCase().includes('missing'))).toBe(true);
+    });
+
+    it('dossier ausente (lista vazia) não lança exceção e nível mantém ok', () => {
+        expect(() =>
+            verificarPacoteScrivenerMaisRecente(criarInput(criarArquivosCompletos(), [])),
+        ).not.toThrow();
+
+        const resultado = verificarPacoteScrivenerMaisRecente(criarInput(criarArquivosCompletos(), []));
+
+        expect(resultado.diagnostics).toBeDefined();
+        expect(resultado.dossiersEncontrados).toBe(0);
+        expect(resultado.nivel).toBe('ok');
     });
 });
