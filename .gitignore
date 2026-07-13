@@ -92,9 +92,6 @@ wdio.conf.ts
 vitest.config.ts
 tsconfig.vitest.json
 
-# Test source files and directories
-test/
-
 # Test-related scripts (generated/runtime)
 debug-test.js
 test-parsing.js
