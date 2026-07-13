@@ -30,12 +30,12 @@ function makeVaultECache(frontmatters: Record<string, Record<string, unknown>>):
 describe('indexarVaultContrarius', () => {
   it('monta listas por coleção e concatena alertas de todos os normalizadores', async () => {
     const { vault, cache } = makeVaultECache({
-      '02_Consciencias/C-001.md': { id: 'C-001', nome: 'Fulano', nucleo_geo: ['Roma'] },
-      '02_Consciencias/sem-id.md': { nome: 'Sem ID' },
-      '03_Retrovidas/R-001.md': { consc_id: 'C-001', livro: 'Livro 1', periodo: 'Sec I' },
-      '05_Eventos/E-001.md': { id_evento: 'E-001', livro: 'Livro 1', periodo: 'Sec I', participantes: ['C-001'] },
-      '06_Lugares/L-001.md': { id_lugar: 'L-001', nome_atual: 'Roma', periodo: 'Sec I' },
-      '04_Relacoes/rel-1.md': { tipo: 'aliado' },
+      '02_Consciencias/C-001.md': { id: 'C-001' },
+      '02_Consciencias/sem-id.md': { historicidade: 'Real' },
+      '03_Retrovidas/R-001.md': { consciencia: 'C-001', livro: 'Livro 1', periodo: ['Sec I'] },
+      '05_Eventos/E-001.md': { codigo: 'E-001', livro: 'Livro 1', periodo: ['Sec I'], retrovidas: ['C-001'] },
+      '06_Lugares/L-001.md': { codigo: 'L-001', nome_atual: 'Roma' },
+      '04_Relacoes/rel-1.md': { a: 'C-001', b: 'C-002', tipo_relacao: 'aliado' },
     });
 
     const indice = await indexarVaultContrarius(vault, cache);
@@ -49,26 +49,26 @@ describe('indexarVaultContrarius', () => {
     expect(indice.alertas.some((a) => a.campo === 'id' && a.path === '02_Consciencias/sem-id.md')).toBe(true);
   });
 
-  it('constrói porId a partir de id/id_evento/id_lugar', async () => {
+  it('constrói porId a partir de id/codigo (evento e lugar)', async () => {
     const { vault, cache } = makeVaultECache({
-      '02_Consciencias/C-001.md': { id: 'C-001', nome: 'Fulano' },
-      '05_Eventos/E-001.md': { id_evento: 'E-001', participantes: ['C-001'] },
-      '06_Lugares/L-001.md': { id_lugar: 'L-001', nome_atual: 'Roma' },
+      '02_Consciencias/C-001.md': { id: 'C-001' },
+      '05_Eventos/E-001.md': { codigo: 'E-001', retrovidas: ['C-001'] },
+      '06_Lugares/L-001.md': { codigo: 'L-001', nome_atual: 'Roma' },
     });
 
     const indice = await indexarVaultContrarius(vault, cache);
 
-    expect(indice.porId.get('C-001')).toMatchObject({ nome: 'Fulano' });
-    expect(indice.porId.get('E-001')).toMatchObject({ participantes: ['C-001'] });
+    expect(indice.porId.has('C-001')).toBe(true);
+    expect(indice.porId.get('E-001')).toMatchObject({ retrovidas: ['C-001'] });
     expect(indice.porId.get('L-001')).toMatchObject({ nome_atual: 'Roma' });
     expect(indice.porId.has('inexistente')).toBe(false);
   });
 
-  it('agrupa por livro, período e núcleo geográfico', async () => {
+  it('agrupa por livro e período (retrovida + evento) e núcleo geográfico (retrovida + evento + lugar)', async () => {
     const { vault, cache } = makeVaultECache({
-      '03_Retrovidas/R-001.md': { consc_id: 'C-001', livro: 'Livro 1', periodo: 'Sec I' },
-      '05_Eventos/E-001.md': { id_evento: 'E-001', livro: 'Livro 1', periodo: 'Sec II', participantes: ['C-001'] },
-      '02_Consciencias/C-001.md': { id: 'C-001', nucleo_geo: ['Roma', 'Alexandria'] },
+      '03_Retrovidas/R-001.md': { consciencia: 'C-001', livro: 'Livro 1', periodo: ['Sec I'], nucleo_geo: ['Roma'] },
+      '05_Eventos/E-001.md': { codigo: 'E-001', livro: 'Livro 1', periodo: ['Sec II'], retrovidas: ['C-001'] },
+      '06_Lugares/L-001.md': { codigo: 'L-001', nome_atual: 'Roma', nucleo_geo: ['Mediterrâneo'] },
     });
 
     const indice = await indexarVaultContrarius(vault, cache);
@@ -77,7 +77,7 @@ describe('indexarVaultContrarius', () => {
     expect(indice.porPeriodo.get('Sec I')).toHaveLength(1);
     expect(indice.porPeriodo.get('Sec II')).toHaveLength(1);
     expect(indice.porNucleoGeo.get('Roma')).toHaveLength(1);
-    expect(indice.porNucleoGeo.get('Alexandria')).toHaveLength(1);
+    expect(indice.porNucleoGeo.get('Mediterrâneo')).toHaveLength(1);
   });
 
   it('é determinístico: mesma entrada produz a mesma ordem de saída', async () => {

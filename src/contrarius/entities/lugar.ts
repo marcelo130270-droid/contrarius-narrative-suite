@@ -2,12 +2,11 @@ import type { AlertaContrarius, Lugar, NotaContrariusBruta, ResultadoNormalizaca
 import { extrairMetadata, getStr, getStrArray } from './campos';
 
 const CAMPOS_CONHECIDOS = [
-  'id_lugar',
+  'codigo',
   'nome_atual',
-  'nomes_historicos',
-  'coordenadas',
+  'nomes_variantes',
+  'coordenadas_google_earth',
   'nucleo_geo',
-  'periodo',
   'livros',
 ] as const;
 
@@ -15,9 +14,9 @@ export function normalizarLugar(nota: NotaContrariusBruta): ResultadoNormalizaca
   const fm = nota.frontmatter;
   const alertas: AlertaContrarius[] = [];
 
-  const id_lugar = getStr(fm, 'id_lugar');
-  if (!id_lugar) {
-    alertas.push({ severidade: 'erro', path: nota.path, campo: 'id_lugar', mensagem: 'Lugar sem id_lugar.' });
+  const codigo = getStr(fm, 'codigo');
+  if (!codigo) {
+    alertas.push({ severidade: 'erro', path: nota.path, campo: 'codigo', mensagem: 'Lugar sem codigo.' });
   }
 
   if (!getStr(fm, 'nome_atual')) {
@@ -26,12 +25,11 @@ export function normalizarLugar(nota: NotaContrariusBruta): ResultadoNormalizaca
 
   const entidade: Lugar = {
     path: nota.path,
-    id_lugar,
+    codigo,
     nome_atual: getStr(fm, 'nome_atual'),
-    nomes_historicos: getStrArray(fm, 'nomes_historicos'),
-    coordenadas: getStr(fm, 'coordenadas'),
-    nucleo_geo: getStr(fm, 'nucleo_geo'),
-    periodo: getStr(fm, 'periodo'),
+    nomes_historicos: getStrArray(fm, 'nomes_variantes'),
+    coordenadas: getStr(fm, 'coordenadas_google_earth'),
+    nucleo_geo: getStrArray(fm, 'nucleo_geo'),
     livros: getStrArray(fm, 'livros'),
     metadata: extrairMetadata(fm, CAMPOS_CONHECIDOS),
   };

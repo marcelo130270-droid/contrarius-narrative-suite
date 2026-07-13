@@ -1,6 +1,16 @@
+import { stripWikiLink } from '../../utils/WikiLinks';
+
 export function getStr(fm: Record<string, unknown>, chave: string): string | undefined {
   const val = fm[chave];
   return typeof val === 'string' && val.trim() ? val.trim() : undefined;
+}
+
+// Alguns campos numéricos no Vault (ex. `vida: 1`) vêm como number no YAML, não como string.
+export function getStrOuNumero(fm: Record<string, unknown>, chave: string): string | undefined {
+  const val = fm[chave];
+  if (typeof val === 'string' && val.trim()) return val.trim();
+  if (typeof val === 'number' && !Number.isNaN(val)) return String(val);
+  return undefined;
 }
 
 export function getStrArray(fm: Record<string, unknown>, chave: string): string[] | undefined {
@@ -13,6 +23,17 @@ export function getStrArray(fm: Record<string, unknown>, chave: string): string[
   }
   if (typeof val === 'string' && val.trim()) return [val.trim()];
   return undefined;
+}
+
+// Para campos que referenciam outras notas via wikilink (ex. `local: ["[[L-001_Acra]]"]`).
+// Aceita array ou item único, e devolve o alvo do link (sem colchetes/alias/heading).
+export function getWikiLinkArray(fm: Record<string, unknown>, chave: string): string[] | undefined {
+  const val = fm[chave];
+  const bruto = Array.isArray(val) ? val : val !== undefined && val !== null ? [val] : [];
+  const arr = bruto
+    .map((item) => stripWikiLink(item))
+    .filter((item): item is string => !!item);
+  return arr.length > 0 ? arr : undefined;
 }
 
 export function getBool(fm: Record<string, unknown>, chave: string): boolean | undefined {

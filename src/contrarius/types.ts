@@ -20,47 +20,46 @@ export interface ContrariusIndexBruto {
   notas: NotaContrariusBruta[];
 }
 
+// Campos confirmados por levantamento no Vault real em 2026-07-13 (ver CLAUDE.md).
+// Uma Consciência não tem nome próprio no frontmatter: o(s) nome(s) vivem em cada Retrovida (`nomes`).
 export interface Consciencia {
   path: string;
   id?: string;
-  nome?: string;
   ident_extraf?: string;
-  nucleo_geo?: string[];
-  religiao?: string;
-  holopensenes?: string[];
+  historicidade?: string;
   grupocarma?: string;
-  reaparece?: boolean;
   metadata: Record<string, unknown>;
 }
 
 export interface Retrovida {
   path: string;
-  consc_id?: string;
+  consciencia?: string;
   vida?: string;
+  nomes?: string[];
   nascimento?: string;
   morte?: string;
   livro?: string;
-  periodo?: string;
+  periodo?: string[];
   nucleo_geo?: string[];
-  mov_historico?: string;
-  pov?: 'real' | 'lendário' | 'fictício' | string;
+  mov_historico?: string[];
+  historicidade?: string;
   holopensenes?: string[];
-  religiao?: string;
+  religiao?: string[];
   metadata: Record<string, unknown>;
 }
 
 export interface Evento {
   path: string;
-  id_evento?: string;
-  local?: string;
-  data?: string;
-  periodo?: string;
+  codigo?: string;
+  titulo?: string;
+  local?: string[];
+  periodo?: string[];
   nucleo_geo?: string[];
   livro?: string;
-  participantes?: string[];
+  retrovidas?: string[];
   holopensenes?: string[];
   religiao?: string;
-  mov_historico?: string;
+  mov_historico?: string[];
   eventos_anteriores?: string[];
   eventos_posteriores?: string[];
   metadata: Record<string, unknown>;
@@ -68,12 +67,11 @@ export interface Evento {
 
 export interface Lugar {
   path: string;
-  id_lugar?: string;
+  codigo?: string;
   nome_atual?: string;
   nomes_historicos?: string[];
   coordenadas?: string;
-  nucleo_geo?: string;
-  periodo?: string;
+  nucleo_geo?: string[];
   livros?: string[];
   metadata: Record<string, unknown>;
 }
