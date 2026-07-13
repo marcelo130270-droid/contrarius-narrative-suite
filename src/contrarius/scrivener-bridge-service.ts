@@ -304,6 +304,20 @@ export class ScrivenerBridgeService {
         );
     }
 
+    async verificarPlanoEscritaPacoteScrivenerObsidian(
+        planoEscrita: ResultadoPlanoEscritaPacoteScrivenerOperacional,
+        adapter: DataAdapterLeituraScrivenerLike,
+    ): Promise<{
+        planoEscrita: ResultadoPlanoEscritaPacoteScrivenerOperacional;
+        verificacao: ResultadoVerificacaoEscritaPacoteScrivener;
+    }> {
+        const verificacao = await verificarEscritaPacoteScrivener(
+            planoEscrita.escrita,
+            criarLeitorPacoteScrivenerObsidian(adapter),
+        );
+        return { planoEscrita, verificacao };
+    }
+
     async executarEVerificarEscritaPacoteOperacionalObsidianComPayloadDoVaultFiltrado<TArquivo extends ArquivoMarkdownContrariusPayloadLike>(
         contexto: ContextoManifestoScrivenerOperacional,
         vault: VaultContrariusPayloadLike<TArquivo>,

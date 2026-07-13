@@ -1,5 +1,6 @@
 import { App, Modal, Notice, Setting } from 'obsidian';
 import { ScrivenerBridgeService } from './scrivener-bridge-service';
+import type { ResultadoPlanoEscritaPacoteScrivenerOperacional } from './scrivener-bridge-service';
 import type { ContextoManifestoScrivenerOperacional } from './scrivener-package-manifest-factory';
 import type { FiltrosPayloadScrivener } from './scrivener-payload-filter-model';
 import type { DataAdapterEscritaScrivenerLike, DataAdapterLeituraScrivenerLike } from './scrivener-obsidian-write-adapter';
@@ -8,7 +9,7 @@ import { FILTROS_PAYLOAD_SCRIVENER_VAZIOS, estadoFiltrosPayloadScrivenerParaFilt
 export class ScrivenerBridgeModal extends Modal {
   private statusEl: HTMLElement | null = null;
   private resultEl: HTMLElement | null = null;
-  private lastContexto: ContextoManifestoScrivenerOperacional | null = null;
+  private lastPlanoEscrita: ResultadoPlanoEscritaPacoteScrivenerOperacional | null = null;
 
   constructor(
     app: App,
@@ -61,7 +62,7 @@ export class ScrivenerBridgeModal extends Modal {
     this.contentEl.empty();
     this.statusEl = null;
     this.resultEl = null;
-    this.lastContexto = null;
+    this.lastPlanoEscrita = null;
   }
 
   private setStatus(text: string): void {
@@ -135,7 +136,6 @@ export class ScrivenerBridgeModal extends Modal {
     this.setResult([]);
     try {
       const contexto = this.getContexto();
-      this.lastContexto = contexto;
       const filtros = this.getFiltros();
       const opcoesFonte = { incluirTexto: false, incluirNotasSoltas: false };
 
@@ -170,6 +170,7 @@ export class ScrivenerBridgeModal extends Modal {
         opcoesFonte,
       );
 
+      this.lastPlanoEscrita = resultado.planoEscrita;
       const { execucao, verificacao, resumo, filtro } = resultado;
       const caminhoPacote = resultado.planoEscrita.preview.manifesto.caminhoPacote;
 
@@ -201,17 +202,18 @@ export class ScrivenerBridgeModal extends Modal {
   }
 
   private async onVerify(): Promise<void> {
-    if (!this.lastContexto) {
+    if (!this.lastPlanoEscrita) {
+      this.setStatus('No write session found.');
+      this.setResult(['Run Write controlled package first.']);
       new Notice('Run Write controlled package first.');
       return;
     }
     this.setStatus('Verifying package write...');
     this.setResult([]);
     try {
-      const contexto = this.lastContexto;
       const adapter = this.app.vault.adapter as unknown as DataAdapterLeituraScrivenerLike;
-      const { verificacao } = await this.bridge.verificarEscritaPacoteOperacionalObsidian(
-        contexto,
+      const { verificacao } = await this.bridge.verificarPlanoEscritaPacoteScrivenerObsidian(
+        this.lastPlanoEscrita,
         adapter,
       );
       this.setStatus(`Verification: ${verificacao.nivel}`);

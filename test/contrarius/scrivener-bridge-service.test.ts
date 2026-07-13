@@ -1367,6 +1367,49 @@ describe('ScrivenerBridgeService package write verification', () => {
 
         expect(saveCount).toBe(0);
     });
+
+    it('verificarPlanoEscritaPacoteScrivenerObsidian verifica plano pré-construído sem reconstruir', async () => {
+        const service = makeService();
+        const memoria = criarAdapterMemoria();
+
+        const resultadoEscrita = await service.executarEscritaPacoteOperacionalObsidian(CONTEXTO, memoria.adapter);
+        const { verificacao, planoEscrita } = await service.verificarPlanoEscritaPacoteScrivenerObsidian(
+            resultadoEscrita.planoEscrita,
+            memoria.adapter,
+        );
+
+        expect(verificacao.nivel).toBe('ok');
+        expect(verificacao.valido).toBe(true);
+        expect(verificacao.erros).toBe(0);
+        expect(verificacao.arquivosVerificados).toBe(resultadoEscrita.planoEscrita.escrita.totalOperacoes);
+        expect(planoEscrita).toBe(resultadoEscrita.planoEscrita);
+    });
+
+    it('verificarPlanoEscritaPacoteScrivenerObsidian detecta arquivos ausentes no disco', async () => {
+        const service = makeService();
+        const memoriaVazia = criarAdapterMemoria();
+
+        const planoEscrita = service.criarPlanoEscritaPacoteOperacional(CONTEXTO);
+        const { verificacao } = await service.verificarPlanoEscritaPacoteScrivenerObsidian(
+            planoEscrita,
+            memoriaVazia.adapter,
+        );
+
+        expect(verificacao.nivel).toBe('error');
+        expect(verificacao.valido).toBe(false);
+        expect(verificacao.arquivosAusentes).toBeGreaterThan(0);
+    });
+
+    it('verificarPlanoEscritaPacoteScrivenerObsidian não chama saveSettings', async () => {
+        let saveCount = 0;
+        const service = new ScrivenerBridgeService({ settings: {}, async saveSettings() { saveCount++; } });
+        const memoria = criarAdapterMemoria();
+        const planoEscrita = service.criarPlanoEscritaPacoteOperacional(CONTEXTO);
+
+        await service.verificarPlanoEscritaPacoteScrivenerObsidian(planoEscrita, memoria.adapter);
+
+        expect(saveCount).toBe(0);
+    });
 });
 
 describe('ScrivenerBridgeService package integrity', () => {
