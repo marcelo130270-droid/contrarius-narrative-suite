@@ -2261,9 +2261,12 @@ export default class StorytellerSuitePlugin extends Plugin {
 		});
 
 		// Contrarius dashboard command (reader/indexer/validator report)
+		// Named distinctly from "Open dashboard" above: Obsidian prefixes every command
+		// with the plugin name ("Contrarius Narrative Suite: ..."), so a name too similar
+		// to the existing "Open dashboard" command is easy to pick by mistake.
 		this.addCommand({
 			id: 'contrarius-open-dashboard',
-			name: 'Contrarius: Open Dashboard',
+			name: 'Open Contrarius dashboard (reader/validator)',
 			callback: () => {
 				void this.activateContrariusDashboardView();
 			}
