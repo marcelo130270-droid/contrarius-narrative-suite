@@ -1,5 +1,5 @@
 import { App, Modal, Notice, Setting } from 'obsidian';
-import type { ScrivenerBridgeService } from './scrivener-bridge-service';
+import { ScrivenerBridgeService } from './scrivener-bridge-service';
 import type { ContextoManifestoScrivenerOperacional } from './scrivener-package-manifest-factory';
 import type { FiltrosPayloadScrivener } from './scrivener-payload-filter-model';
 import type { DataAdapterEscritaScrivenerLike, DataAdapterLeituraScrivenerLike } from './scrivener-obsidian-write-adapter';
@@ -8,6 +8,7 @@ import { FILTROS_PAYLOAD_SCRIVENER_VAZIOS, estadoFiltrosPayloadScrivenerParaFilt
 export class ScrivenerBridgeModal extends Modal {
   private statusEl: HTMLElement | null = null;
   private resultEl: HTMLElement | null = null;
+  private lastContexto: ContextoManifestoScrivenerOperacional | null = null;
 
   constructor(
     app: App,
@@ -22,7 +23,7 @@ export class ScrivenerBridgeModal extends Modal {
       origemVault: this.app.vault.getName(),
       diretorioPacotes: 'contrarius-scrivener-packages',
       livro: 'operational-preview',
-      observacoes: 'Operational package generated from the Contrarius Scrivener Bridge modal.',
+      observacoes: 'Operational package generated from Contrarius Narrative Suite Scrivener Bridge.',
       agora: new Date(),
     };
   }
@@ -60,6 +61,7 @@ export class ScrivenerBridgeModal extends Modal {
     this.contentEl.empty();
     this.statusEl = null;
     this.resultEl = null;
+    this.lastContexto = null;
   }
 
   private setStatus(text: string): void {
@@ -133,6 +135,7 @@ export class ScrivenerBridgeModal extends Modal {
     this.setResult([]);
     try {
       const contexto = this.getContexto();
+      this.lastContexto = contexto;
       const filtros = this.getFiltros();
       const opcoesFonte = { incluirTexto: false, incluirNotasSoltas: false };
 
@@ -198,10 +201,14 @@ export class ScrivenerBridgeModal extends Modal {
   }
 
   private async onVerify(): Promise<void> {
+    if (!this.lastContexto) {
+      new Notice('Run Write controlled package first.');
+      return;
+    }
     this.setStatus('Verifying package write...');
     this.setResult([]);
     try {
-      const contexto = this.getContexto();
+      const contexto = this.lastContexto;
       const adapter = this.app.vault.adapter as unknown as DataAdapterLeituraScrivenerLike;
       const { verificacao } = await this.bridge.verificarEscritaPacoteOperacionalObsidian(
         contexto,
