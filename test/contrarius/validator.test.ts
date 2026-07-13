@@ -1,0 +1,128 @@
+import { describe, it, expect } from 'vitest';
+import { indexarVaultContrarius } from '../../src/contrarius/indexer';
+import { validarIndiceContrarius } from '../../src/contrarius/validator';
+import type {
+  ArquivoMarkdownContrariusLike,
+  CacheArquivoContrariusLike,
+  MetadataCacheContrariusLike,
+  VaultContrariusLike,
+} from '../../src/contrarius/reader';
+
+function makeArquivo(path: string): ArquivoMarkdownContrariusLike {
+  return { path, basename: path.split('/').pop()!.replace('.md', '') };
+}
+
+function makeVaultECache(frontmatters: Record<string, Record<string, unknown>>): {
+  vault: VaultContrariusLike;
+  cache: MetadataCacheContrariusLike;
+} {
+  const arquivos = Object.keys(frontmatters).map(makeArquivo);
+  return {
+    vault: { getMarkdownFiles: () => arquivos },
+    cache: {
+      getFileCache: (arquivo): CacheArquivoContrariusLike | null => {
+        const fm = frontmatters[arquivo.path];
+        return fm ? { frontmatter: fm } : null;
+      },
+    },
+  };
+}
+
+describe('validarIndiceContrarius', () => {
+  it('não gera alerta quando tudo é consistente', async () => {
+    const { vault, cache } = makeVaultECache({
+      '02_Consciencias/C-001.md': { id: 'C-001', nome: 'Fulano' },
+      '03_Retrovidas/R-001.md': { consc_id: 'C-001', livro: 'Livro 1', periodo: 'Sec I' },
+      '05_Eventos/E-001.md': {
+        id_evento: 'E-001',
+        local: 'L-001',
+        livro: 'Livro 1',
+        periodo: 'Sec I',
+        participantes: ['C-001'],
+      },
+      '06_Lugares/L-001.md': { id_lugar: 'L-001', nome_atual: 'Roma', periodo: 'Sec I' },
+    });
+
+    const indice = await indexarVaultContrarius(vault, cache);
+    expect(validarIndiceContrarius(indice)).toEqual([]);
+  });
+
+  it('detecta consc_id apontando para consciência inexistente', async () => {
+    const { vault, cache } = makeVaultECache({
+      '03_Retrovidas/R-001.md': { consc_id: 'C-999', livro: 'Livro 1', periodo: 'Sec I' },
+    });
+
+    const indice = await indexarVaultContrarius(vault, cache);
+    const alertas = validarIndiceContrarius(indice);
+
+    expect(alertas).toContainEqual(
+      expect.objectContaining({ severidade: 'erro', campo: 'consc_id', path: '03_Retrovidas/R-001.md' }),
+    );
+  });
+
+  it('detecta participante de evento inexistente', async () => {
+    const { vault, cache } = makeVaultECache({
+      '05_Eventos/E-001.md': { id_evento: 'E-001', participantes: ['C-999'], livro: 'L1', periodo: 'P1' },
+    });
+
+    const indice = await indexarVaultContrarius(vault, cache);
+    const alertas = validarIndiceContrarius(indice);
+
+    expect(alertas).toContainEqual(expect.objectContaining({ severidade: 'erro', campo: 'participantes' }));
+  });
+
+  it('detecta lugar referenciado (padrão L-###) mas ausente', async () => {
+    const { vault, cache } = makeVaultECache({
+      '05_Eventos/E-001.md': { id_evento: 'E-001', local: 'L-999', livro: 'L1', periodo: 'P1' },
+    });
+
+    const indice = await indexarVaultContrarius(vault, cache);
+    const alertas = validarIndiceContrarius(indice);
+
+    expect(alertas).toContainEqual(expect.objectContaining({ severidade: 'erro', campo: 'local' }));
+  });
+
+  it('não alerta local em texto livre que não segue o padrão L-###', async () => {
+    const { vault, cache } = makeVaultECache({
+      '05_Eventos/E-001.md': { id_evento: 'E-001', local: 'Alguma cidade antiga', livro: 'L1', periodo: 'P1' },
+    });
+
+    const indice = await indexarVaultContrarius(vault, cache);
+    const alertas = validarIndiceContrarius(indice);
+
+    expect(alertas.filter((a) => a.campo === 'local')).toHaveLength(0);
+  });
+
+  it('detecta ID duplicado entre duas notas', async () => {
+    const { vault, cache } = makeVaultECache({
+      '02_Consciencias/C-001a.md': { id: 'C-001', nome: 'Fulano' },
+      '02_Consciencias/C-001b.md': { id: 'C-001', nome: 'Outro Fulano' },
+    });
+
+    const indice = await indexarVaultContrarius(vault, cache);
+    const alertas = validarIndiceContrarius(indice);
+    const duplicados = alertas.filter((a) => a.campo === 'id');
+
+    expect(duplicados).toHaveLength(2);
+    expect(duplicados.every((a) => a.severidade === 'erro')).toBe(true);
+  });
+
+  it('alerta aviso para retrovida/evento sem livro ou período', async () => {
+    const { vault, cache } = makeVaultECache({
+      '03_Retrovidas/R-001.md': { consc_id: 'C-001' },
+      '02_Consciencias/C-001.md': { id: 'C-001' },
+    });
+
+    const indice = await indexarVaultContrarius(vault, cache);
+    const alertas = validarIndiceContrarius(indice);
+
+    expect(alertas).toContainEqual(expect.objectContaining({ campo: 'livro', severidade: 'aviso' }));
+    expect(alertas).toContainEqual(expect.objectContaining({ campo: 'periodo', severidade: 'aviso' }));
+  });
+
+  it('não quebra com índice vazio', async () => {
+    const { vault, cache } = makeVaultECache({});
+    const indice = await indexarVaultContrarius(vault, cache);
+    expect(validarIndiceContrarius(indice)).toEqual([]);
+  });
+});
