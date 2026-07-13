@@ -273,6 +273,14 @@ describe('criarReadmePacoteScrivener', () => {
         expect(readme.conteudo).toContain('[Scrivener import](scrivener-import.md)');
     });
 
+    it('README contem link para scrivener/index.md', () => {
+        const manifesto = criarManifestoBase();
+        const payload = criarPayloadScrivener({ manifestoId: manifesto.id, itens: [] });
+        const readme = criarReadmePacoteScrivener(manifesto, payload);
+
+        expect(readme.conteudo).toContain('[Scrivener workspace](scrivener/index.md)');
+    });
+
     it('nao depende de fs, path ou obsidian', () => {
         const manifesto = criarManifestoBase();
         const payload = criarPayloadScrivener({

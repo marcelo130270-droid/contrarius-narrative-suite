@@ -21,12 +21,15 @@ describe('scrivener-package-write-plan-model', () => {
         const plano = criarPlanoPacoteScrivener(criarManifestoBase());
         const escrita = criarPlanoEscritaPacoteScrivener(plano);
 
-        expect(escrita.totalOperacoes).toBe(5);
+        expect(escrita.totalOperacoes).toBe(8);
         expect(escrita.operacoes.map(operacao => operacao.caminhoRelativo)).toEqual([
             'manifest.json',
             'payload/index.json',
             'README.md',
             'scrivener-import.md',
+            'scrivener/index.md',
+            'scrivener/timeline/eventos.md',
+            'scrivener/timeline/cronologia.md',
             'integrity/report.json',
         ]);
     });
@@ -40,6 +43,9 @@ describe('scrivener-package-write-plan-model', () => {
             'contrarius-scrivener-packages/exportacao-livro-1.scrivener-package/payload/index.json',
             'contrarius-scrivener-packages/exportacao-livro-1.scrivener-package/README.md',
             'contrarius-scrivener-packages/exportacao-livro-1.scrivener-package/scrivener-import.md',
+            'contrarius-scrivener-packages/exportacao-livro-1.scrivener-package/scrivener/index.md',
+            'contrarius-scrivener-packages/exportacao-livro-1.scrivener-package/scrivener/timeline/eventos.md',
+            'contrarius-scrivener-packages/exportacao-livro-1.scrivener-package/scrivener/timeline/cronologia.md',
             'contrarius-scrivener-packages/exportacao-livro-1.scrivener-package/integrity/report.json',
         ]);
     });

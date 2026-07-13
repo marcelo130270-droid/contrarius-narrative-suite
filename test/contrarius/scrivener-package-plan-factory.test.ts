@@ -21,12 +21,15 @@ describe('scrivener-package-plan-factory', () => {
             erros: [],
         });
         expect(resultado.plano.manifesto).toEqual(resultado.manifesto);
-        expect(resultado.plano.totalArquivos).toBe(5);
+        expect(resultado.plano.totalArquivos).toBe(8);
         expect(resultado.plano.arquivos.map(arquivo => arquivo.caminhoRelativo)).toEqual([
             'manifest.json',
             'payload/index.json',
             'README.md',
             'scrivener-import.md',
+            'scrivener/index.md',
+            'scrivener/timeline/eventos.md',
+            'scrivener/timeline/cronologia.md',
             'integrity/report.json',
         ]);
     });
@@ -114,7 +117,7 @@ describe('scrivener-package-plan-factory', () => {
 
         const itemArquivos = resultado.plano.arquivos.filter(a => a.tipo === 'payload-item');
         expect(itemArquivos).toHaveLength(2);
-        expect(resultado.plano.totalArquivos).toBe(7);
+        expect(resultado.plano.totalArquivos).toBe(12);
     });
 
     it('payload/index.json e arquivos payload-item sao coerentes', () => {
@@ -188,6 +191,6 @@ describe('scrivener-package-plan-factory', () => {
         });
 
         expect(resultado.manifesto.tipo).toBe('aplicacao');
-        expect(resultado.plano.totalArquivos).toBe(5);
+        expect(resultado.plano.totalArquivos).toBe(8);
     });
 });

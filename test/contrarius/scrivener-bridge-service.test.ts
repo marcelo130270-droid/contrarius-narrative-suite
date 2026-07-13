@@ -208,12 +208,15 @@ describe('ScrivenerBridgeService package preview', () => {
         });
 
         expect(preview.manifesto.id).toBe('exportacao-livro-1-2000-01-01t00-00-00-000z');
-        expect(preview.plano.totalArquivos).toBe(5);
+        expect(preview.plano.totalArquivos).toBe(8);
         expect(preview.plano.arquivos.map(arquivo => arquivo.caminhoRelativo)).toEqual([
             'manifest.json',
             'payload/index.json',
             'README.md',
             'scrivener-import.md',
+            'scrivener/index.md',
+            'scrivener/timeline/eventos.md',
+            'scrivener/timeline/cronologia.md',
             'integrity/report.json',
         ]);
     });
@@ -238,12 +241,15 @@ describe('ScrivenerBridgeService write plan', () => {
         });
 
         expect(resultado.preview.manifesto.id).toBe('exportacao-livro-1-2000-01-01t00-00-00-000z');
-        expect(resultado.escrita.totalOperacoes).toBe(5);
+        expect(resultado.escrita.totalOperacoes).toBe(8);
         expect(resultado.escrita.operacoes.map(operacao => operacao.caminhoRelativo)).toEqual([
             'manifest.json',
             'payload/index.json',
             'README.md',
             'scrivener-import.md',
+            'scrivener/index.md',
+            'scrivener/timeline/eventos.md',
+            'scrivener/timeline/cronologia.md',
             'integrity/report.json',
         ]);
         expect(resultado.escrita.operacoes[0].caminhoDestino).toBe(
@@ -298,10 +304,10 @@ describe('ScrivenerBridgeService write execution', () => {
         );
 
         expect(resultado.planoEscrita.preview.manifesto.id).toBe('exportacao-livro-1-2000-01-01t00-00-00-000z');
-        expect(resultado.execucao.totalOperacoes).toBe(5);
-        expect(resultado.execucao.operacoesOk).toBe(5);
+        expect(resultado.execucao.totalOperacoes).toBe(8);
+        expect(resultado.execucao.operacoesOk).toBe(8);
         expect(resultado.execucao.operacoesErro).toBe(0);
-        expect(arquivos.size).toBe(5);
+        expect(arquivos.size).toBe(8);
         expect(arquivos.get('contrarius-scrivener-packages/exportacao-livro-1-2000-01-01t00-00-00-000z.scrivener-package/manifest.json')).toContain('exportacao-livro-1');
     });
 
@@ -330,8 +336,8 @@ describe('ScrivenerBridgeService write execution', () => {
             },
         );
 
-        expect(resultado.execucao.totalOperacoes).toBe(5);
-        expect(resultado.execucao.operacoesOk).toBe(4);
+        expect(resultado.execucao.totalOperacoes).toBe(8);
+        expect(resultado.execucao.operacoesOk).toBe(7);
         expect(resultado.execucao.operacoesErro).toBe(1);
         expect(resultado.execucao.resultados[1].erro).toBe('Falha simulada pelo bridge');
     });
@@ -409,8 +415,8 @@ describe('ScrivenerBridgeService controlled write execution', () => {
             memoria.gravador,
         );
 
-        expect(resultado.execucao.totalOperacoes).toBe(5);
-        expect(resultado.execucao.operacoesOk).toBe(5);
+        expect(resultado.execucao.totalOperacoes).toBe(8);
+        expect(resultado.execucao.operacoesOk).toBe(8);
         expect(resultado.execucao.operacoesErro).toBe(0);
         expect(memoria.arquivos.get('contrarius-scrivener-packages/exportacao-livro-1-2000-01-01t00-00-00-000z.scrivener-package/manifest.json')).toContain('exportacao-livro-1');
         expect(memoria.mkdirs).toContain('contrarius-scrivener-packages');
@@ -567,7 +573,7 @@ describe('ScrivenerBridgeService Contrarius payload extraction', () => {
     };
     const resultado = service.criarPlanoEscritaPacoteOperacionalComPayloadContrarius(CONTEXTO, fonte);
     expect(resultado.preview.manifesto.id).toBe('exportacao-livro-1-2000-01-01t00-00-00-000z');
-    expect(resultado.escrita.totalOperacoes).toBe(6);
+    expect(resultado.escrita.totalOperacoes).toBe(10);
 
     const payloadOp = resultado.escrita.operacoes.find(o => o.caminhoRelativo === 'payload/index.json');
     expect(payloadOp).toBeDefined();
@@ -708,8 +714,8 @@ describe('ScrivenerBridgeService Contrarius vault payload source', () => {
       CONTEXTO, vault, cache, memoria.adapter,
     );
 
-    expect(resultado.execucao.totalOperacoes).toBe(6);
-    expect(resultado.execucao.operacoesOk).toBe(6);
+    expect(resultado.execucao.totalOperacoes).toBe(10);
+    expect(resultado.execucao.operacoesOk).toBe(10);
     expect(resultado.execucao.operacoesErro).toBe(0);
     expect(resultado.extracao.totalItens).toBe(1);
   });
@@ -806,10 +812,10 @@ describe('ScrivenerBridgeService Obsidian write execution', () => {
 
         const resultado = await service.executarEscritaPacoteOperacionalObsidian(CONTEXTO, memoria.adapter);
 
-        expect(resultado.execucao.totalOperacoes).toBe(5);
-        expect(resultado.execucao.operacoesOk).toBe(5);
+        expect(resultado.execucao.totalOperacoes).toBe(8);
+        expect(resultado.execucao.operacoesOk).toBe(8);
         expect(resultado.execucao.operacoesErro).toBe(0);
-        expect(memoria.arquivos.size).toBe(5);
+        expect(memoria.arquivos.size).toBe(8);
     });
 
     it('cria diretórios intermediários', async () => {
@@ -1296,8 +1302,8 @@ describe('ScrivenerBridgeService package write verification', () => {
         expect(resultado.verificacao.nivel).toBe('ok');
         expect(resultado.verificacao.valido).toBe(true);
         expect(resultado.verificacao.erros).toBe(0);
-        expect(resultado.verificacao.arquivosVerificados).toBe(5);
-        expect(resultado.planoEscrita.escrita.totalOperacoes).toBe(5);
+        expect(resultado.verificacao.arquivosVerificados).toBe(8);
+        expect(resultado.planoEscrita.escrita.totalOperacoes).toBe(8);
     });
 
     it('verificarEscritaPacoteOperacionalObsidian usa adapter exists e read', async () => {
@@ -1312,7 +1318,7 @@ describe('ScrivenerBridgeService package write verification', () => {
 
         expect(resultado.verificacao.nivel).toBe('ok');
         expect(resultado.verificacao.valido).toBe(true);
-        expect(resultado.verificacao.arquivosVerificados).toBe(5);
+        expect(resultado.verificacao.arquivosVerificados).toBe(8);
     });
 
     it('executarEVerificarEscritaPacoteOperacionalObsidianComPayloadDoVaultFiltrado escreve e verifica ok', async () => {
@@ -1448,7 +1454,7 @@ describe('ScrivenerBridgeService package integrity', () => {
     expect(resultado.valido).toBe(true);
     expect(resultado.erros).toBe(0);
     expect(resultado.avisos).toBe(0);
-    expect(resultado.totalArquivos).toBe(5);
+    expect(resultado.totalArquivos).toBe(8);
     expect(resultado.totalItensPayload).toBe(0);
     expect(resultado.totalArquivosItens).toBe(0);
   });
@@ -1460,7 +1466,7 @@ describe('ScrivenerBridgeService package integrity', () => {
     expect(resultado.nivel).toBe('ok');
     expect(resultado.valido).toBe(true);
     expect(resultado.erros).toBe(0);
-    expect(resultado.totalArquivos).toBe(5);
+    expect(resultado.totalArquivos).toBe(8);
   });
 
   it('validarIntegridadePayloadContrariusDoVault valida payload extraído do vault', async () => {

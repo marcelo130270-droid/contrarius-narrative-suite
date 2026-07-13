@@ -37,10 +37,10 @@ describe('scrivener-package-write-executor', () => {
 
         const resultado = await executarPlanoEscritaPacoteScrivener(plano, adaptador);
 
-        expect(resultado.totalOperacoes).toBe(5);
-        expect(resultado.operacoesOk).toBe(5);
+        expect(resultado.totalOperacoes).toBe(8);
+        expect(resultado.operacoesOk).toBe(8);
         expect(resultado.operacoesErro).toBe(0);
-        expect(arquivos.size).toBe(5);
+        expect(arquivos.size).toBe(8);
         expect(arquivos.get('contrarius-scrivener-packages/exportacao-livro-1.scrivener-package/manifest.json')).toContain('exportacao-livro-1');
     });
 
@@ -72,8 +72,8 @@ describe('scrivener-package-write-executor', () => {
 
         const resultado = await executarPlanoEscritaPacoteScrivener(plano, adaptador);
 
-        expect(resultado.totalOperacoes).toBe(5);
-        expect(resultado.operacoesOk).toBe(4);
+        expect(resultado.totalOperacoes).toBe(8);
+        expect(resultado.operacoesOk).toBe(7);
         expect(resultado.operacoesErro).toBe(1);
         expect(resultado.resultados[1]).toMatchObject({
             caminhoRelativo: 'payload/index.json',

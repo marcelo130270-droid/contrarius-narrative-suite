@@ -5,8 +5,9 @@ import { criarArquivosMarkdownPayloadScrivener } from './scrivener-payload-markd
 import { criarReadmePacoteScrivener } from './scrivener-package-readme-model';
 import { criarArquivoRelatorioIntegridadePacoteScrivener } from './scrivener-package-integrity-report-model';
 import { criarArquivoImportacaoMarkdownScrivener } from './scrivener-import-markdown-model';
+import { criarArquivosEstruturadosScrivener } from './scrivener-structured-export-model';
 
-export type TipoArquivoPlanoScrivener = 'manifest' | 'payload' | 'readme' | 'payload-item' | 'integrity-report' | 'scrivener-import';
+export type TipoArquivoPlanoScrivener = 'manifest' | 'payload' | 'readme' | 'payload-item' | 'integrity-report' | 'scrivener-import' | 'scrivener-structured';
 
 export interface ArquivoPlanoPacoteScrivener {
     caminhoRelativo: string;
@@ -73,12 +74,17 @@ export function criarPlanoPacoteScrivener(
 
     const importacaoMd = criarArquivoImportacaoMarkdownScrivener(payload, manifesto);
 
+    const arquivosEstruturados = criarArquivosEstruturadosScrivener(payload).map(
+        arquivo => criarArquivoPlanoScrivener(arquivo.caminhoRelativo, 'scrivener-structured', arquivo.conteudo),
+    );
+
     const arquivosBase = [
         criarArquivoPlanoScrivener('manifest.json', 'manifest', criarManifestJson(manifesto)),
         criarArquivoPlanoScrivener('payload/index.json', 'payload', gerarPayloadIndexJson(payload)),
         criarArquivoPlanoScrivener('README.md', 'readme', criarReadmePacoteScrivener(manifesto, payload).conteudo),
         criarArquivoPlanoScrivener(importacaoMd.caminhoRelativo, 'scrivener-import', importacaoMd.conteudo),
         ...arquivosItem,
+        ...arquivosEstruturados,
     ];
 
     // Plano provisório sem o relatório evita circularidade na validação
