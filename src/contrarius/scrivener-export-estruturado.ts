@@ -1,6 +1,13 @@
 import type { IndiceContrarius } from './indexer';
 import { ordenarEventosParaTimeline, type ModoOrdenacaoTimeline } from './timeline';
 import type { Evento } from './types';
+import {
+  blocoConsciencia,
+  blocoEvento,
+  blocoLugar,
+  blocoRelacao,
+  blocoRetrovida,
+} from './scrivener-export-minimo';
 
 function linhaIndice(rotulo: string, path: string): string {
   return `- [${rotulo}](${path})`;
@@ -90,4 +97,41 @@ export function gerarTimelineCronologica(indice: IndiceContrarius, geradoEm: Dat
 
 export function gerarTimelineNarrativa(indice: IndiceContrarius, geradoEm: Date = new Date()): string {
   return gerarTimeline(indice, 'narrativa', 'Contrarius — Timeline narrativa (ordem de leitura)', geradoEm);
+}
+
+// Etapa 14, sub-fase 3: dossiê por tipo — um arquivo por coleção, com todos os campos detalhados
+// (não só o link do índice). Reaproveita os mesmos blocos por entidade da Etapa 11
+// (scrivener-export-minimo.ts), só reorganizados um tipo por arquivo em vez de tudo junto.
+function cabecalhoDossie(titulo: string, geradoEm: Date): string[] {
+  return [`# ${titulo}`, '', `Gerado em: ${geradoEm.toISOString()}`, ''];
+}
+
+export function gerarDossieConsciencias(indice: IndiceContrarius, geradoEm: Date = new Date()): string {
+  const linhas = cabecalhoDossie('Contrarius — Dossiê de Consciências', geradoEm);
+  for (const c of indice.consciencias) linhas.push(...blocoConsciencia(c));
+  return linhas.join('\n');
+}
+
+export function gerarDossieRetrovidas(indice: IndiceContrarius, geradoEm: Date = new Date()): string {
+  const linhas = cabecalhoDossie('Contrarius — Dossiê de Retrovidas', geradoEm);
+  for (const r of indice.retrovidas) linhas.push(...blocoRetrovida(r));
+  return linhas.join('\n');
+}
+
+export function gerarDossieEventos(indice: IndiceContrarius, geradoEm: Date = new Date()): string {
+  const linhas = cabecalhoDossie('Contrarius — Dossiê de Eventos', geradoEm);
+  for (const e of indice.eventos) linhas.push(...blocoEvento(e));
+  return linhas.join('\n');
+}
+
+export function gerarDossieLugares(indice: IndiceContrarius, geradoEm: Date = new Date()): string {
+  const linhas = cabecalhoDossie('Contrarius — Dossiê de Lugares', geradoEm);
+  for (const l of indice.lugares) linhas.push(...blocoLugar(l));
+  return linhas.join('\n');
+}
+
+export function gerarDossieRelacoes(indice: IndiceContrarius, geradoEm: Date = new Date()): string {
+  const linhas = cabecalhoDossie('Contrarius — Dossiê de Relações', geradoEm);
+  indice.relacoes.forEach((r, i) => linhas.push(...blocoRelacao(r, i)));
+  return linhas.join('\n');
 }

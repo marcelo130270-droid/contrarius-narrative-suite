@@ -7,7 +7,16 @@ import { CAMPOS_AGRUPAVEIS, type EntidadeAgrupavel } from '../contrarius/agrupam
 import { gerarScrivenerImportMarkdown } from '../contrarius/scrivener-export-minimo';
 import { construirPlanoPacoteScrivener, nomePastaPacote } from '../contrarius/scrivener-package-plano';
 import { verificarPacoteScrivener, type ArquivoLidoPacote, type RelatorioVerificacaoPacote } from '../contrarius/scrivener-package-verificacao';
-import { gerarIndiceEstruturado, gerarTimelineCronologica, gerarTimelineNarrativa } from '../contrarius/scrivener-export-estruturado';
+import {
+  gerarDossieConsciencias,
+  gerarDossieEventos,
+  gerarDossieLugares,
+  gerarDossieRelacoes,
+  gerarDossieRetrovidas,
+  gerarIndiceEstruturado,
+  gerarTimelineCronologica,
+  gerarTimelineNarrativa,
+} from '../contrarius/scrivener-export-estruturado';
 import { ordenarEventosParaTimeline } from '../contrarius/timeline';
 import type {
   AlertaContrarius,
@@ -196,6 +205,20 @@ export class ContrariusDashboardView extends ItemView {
     }
   }
 
+  // Etapa 14, sub-fase 3: dossiê por tipo — 5 arquivos, um por coleção.
+  private async atualizarDossies(indice: IndiceContrarius): Promise<void> {
+    try {
+      await this.escreverOuAtualizarArquivo('scrivener/dossier/consciencias.md', gerarDossieConsciencias(indice));
+      await this.escreverOuAtualizarArquivo('scrivener/dossier/retrovidas.md', gerarDossieRetrovidas(indice));
+      await this.escreverOuAtualizarArquivo('scrivener/dossier/eventos.md', gerarDossieEventos(indice));
+      await this.escreverOuAtualizarArquivo('scrivener/dossier/lugares.md', gerarDossieLugares(indice));
+      await this.escreverOuAtualizarArquivo('scrivener/dossier/relacoes.md', gerarDossieRelacoes(indice));
+      new Notice('Dossiês atualizados em scrivener/dossier/.');
+    } catch (erro) {
+      new Notice(`Falha ao atualizar dossiês: ${erro instanceof Error ? erro.message : String(erro)}`);
+    }
+  }
+
   // Etapa 12: pacote com manifest/README/integridade. Nome de pasta com timestamp — nunca sobrescreve
   // um pacote anterior. Write simples e sequencial, sem estado de modal: se falhar no meio, a Notice de
   // erro mostra exatamente onde parou, e o pacote parcial fica no disco pra inspeção (não é escondido).
@@ -333,6 +356,9 @@ export class ContrariusDashboardView extends ItemView {
 
     const botaoTimeline = botoes.createEl('button', { text: 'Atualizar timeline exportável' });
     botaoTimeline.addEventListener('click', () => void this.atualizarTimelineExportavel(indice));
+
+    const botaoDossies = botoes.createEl('button', { text: 'Atualizar dossiês' });
+    botaoDossies.addEventListener('click', () => void this.atualizarDossies(indice));
 
     const resumo = container.createDiv({ cls: 'contrarius-dashboard-resumo' });
     const totais: Array<[string, number]> = [

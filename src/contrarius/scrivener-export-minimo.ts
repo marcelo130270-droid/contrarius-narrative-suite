@@ -11,7 +11,7 @@ function linhaArray(rotulo: string, valores: string[] | undefined): string | nul
   return `- **${rotulo}:** ${valores.join(', ')}`;
 }
 
-function blocoConsciencia(c: Consciencia): string[] {
+export function blocoConsciencia(c: Consciencia): string[] {
   return [
     `### ${c.id ?? '(sem id)'}`,
     '',
@@ -26,7 +26,7 @@ function blocoConsciencia(c: Consciencia): string[] {
   ];
 }
 
-function blocoRetrovida(r: Retrovida): string[] {
+export function blocoRetrovida(r: Retrovida): string[] {
   const titulo = r.nomes && r.nomes.length > 0 ? r.nomes[0] : '(sem nome)';
   return [
     `### ${titulo}`,
@@ -48,7 +48,7 @@ function blocoRetrovida(r: Retrovida): string[] {
   ];
 }
 
-function blocoEvento(e: Evento): string[] {
+export function blocoEvento(e: Evento): string[] {
   return [
     `### ${e.titulo ?? e.num_reg ?? '(sem título)'}`,
     '',
@@ -68,7 +68,7 @@ function blocoEvento(e: Evento): string[] {
   ];
 }
 
-function blocoLugar(l: Lugar): string[] {
+export function blocoLugar(l: Lugar): string[] {
   return [
     `### ${l.nome_atual ?? l.num_reg ?? '(sem nome)'}`,
     '',
@@ -83,7 +83,7 @@ function blocoLugar(l: Lugar): string[] {
   ];
 }
 
-function blocoRelacao(r: Relacao, indice: number): string[] {
+export function blocoRelacao(r: Relacao, indice: number): string[] {
   const campos = Object.entries(r.metadata)
     .map(([chave, valor]) => linha(chave, typeof valor === 'string' ? valor : JSON.stringify(valor)))
     .filter((l): l is string => l !== null);

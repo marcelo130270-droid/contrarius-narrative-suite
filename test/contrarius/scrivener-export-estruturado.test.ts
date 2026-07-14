@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import {
+  gerarDossieConsciencias,
+  gerarDossieEventos,
+  gerarDossieLugares,
+  gerarDossieRelacoes,
+  gerarDossieRetrovidas,
   gerarIndiceEstruturado,
   gerarTimelineCronologica,
   gerarTimelineNarrativa,
@@ -81,5 +86,35 @@ describe('gerarTimelineNarrativa', () => {
     const md = gerarTimelineNarrativa(indice, DATA_FIXA);
     expect(md).toContain('# Contrarius — Timeline narrativa');
     expect(md.indexOf('Antes')).toBeLessThan(md.indexOf('Depois'));
+  });
+});
+
+describe('dossiês por tipo', () => {
+  it('cada dossiê tem seu próprio título e só as entidades do seu tipo', () => {
+    const indice = indiceVazio();
+    indice.consciencias.push({ path: '02_Consciencias/C-001.md', id: 'C-001', metadata: {} });
+    indice.retrovidas.push({ path: '03_Retrovidas/R-001.md', consciencia: 'C-001', nomes: ['Fulano'], metadata: {} });
+    indice.eventos.push({ path: '05_Eventos/E-001.md', titulo: 'Evento X', metadata: {} });
+    indice.lugares.push({ path: '06_Lugares/L-001.md', num_reg: 'L-001', nome_atual: 'Roma', metadata: {} });
+    indice.relacoes.push({ path: '04_Relacoes/rel-1.md', metadata: { a: 'C-001', b: 'C-002' } });
+
+    const dossieConsciencias = gerarDossieConsciencias(indice, DATA_FIXA);
+    expect(dossieConsciencias).toContain('# Contrarius — Dossiê de Consciências');
+    expect(dossieConsciencias).toContain('C-001');
+    expect(dossieConsciencias).not.toContain('Fulano');
+
+    expect(gerarDossieRetrovidas(indice, DATA_FIXA)).toContain('Fulano');
+    expect(gerarDossieEventos(indice, DATA_FIXA)).toContain('Evento X');
+    expect(gerarDossieLugares(indice, DATA_FIXA)).toContain('Roma');
+    expect(gerarDossieRelacoes(indice, DATA_FIXA)).toContain('a:** C-001');
+  });
+
+  it('nenhum dos 5 dossiês lança exceção com índice vazio', () => {
+    const indice = indiceVazio();
+    expect(() => gerarDossieConsciencias(indice, DATA_FIXA)).not.toThrow();
+    expect(() => gerarDossieRetrovidas(indice, DATA_FIXA)).not.toThrow();
+    expect(() => gerarDossieEventos(indice, DATA_FIXA)).not.toThrow();
+    expect(() => gerarDossieLugares(indice, DATA_FIXA)).not.toThrow();
+    expect(() => gerarDossieRelacoes(indice, DATA_FIXA)).not.toThrow();
   });
 });
