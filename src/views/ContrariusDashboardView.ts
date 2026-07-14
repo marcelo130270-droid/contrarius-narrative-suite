@@ -4,6 +4,7 @@ import { indexarVaultContrarius, type IndiceContrarius } from '../contrarius/ind
 import { validarIndiceContrarius } from '../contrarius/validator';
 import { classificarColecaoContrariusPorCaminho } from '../contrarius/reader';
 import { CAMPOS_AGRUPAVEIS, type EntidadeAgrupavel } from '../contrarius/agrupamento';
+import { gerarScrivenerImportMarkdown } from '../contrarius/scrivener-export-minimo';
 import type {
   AlertaContrarius,
   Evento,
@@ -132,6 +133,24 @@ export class ContrariusDashboardView extends ItemView {
     }
   }
 
+  // Etapa 11: exportação mínima — um único arquivo, sem pacote/verificação (isso vem depois,
+  // já com a lição aprendida de nunca depender de estado efêmero de modal).
+  private async exportarParaScrivener(indice: IndiceContrarius): Promise<void> {
+    const CAMINHO_EXPORT = 'scrivener-import.md';
+    try {
+      const conteudo = gerarScrivenerImportMarkdown(indice);
+      const existente = this.app.vault.getAbstractFileByPath(CAMINHO_EXPORT);
+      if (existente instanceof TFile) {
+        await this.app.vault.modify(existente, conteudo);
+      } else {
+        await this.app.vault.create(CAMINHO_EXPORT, conteudo);
+      }
+      new Notice(`Exportado para ${CAMINHO_EXPORT}.`);
+    } catch (erro) {
+      new Notice(`Falha ao exportar: ${erro instanceof Error ? erro.message : String(erro)}`);
+    }
+  }
+
   private renderizar(): void {
     const indice = this.indice;
     if (!indice) return;
@@ -155,6 +174,9 @@ export class ContrariusDashboardView extends ItemView {
         () => new Notice('Não foi possível copiar o relatório.'),
       );
     });
+
+    const botaoExportar = botoes.createEl('button', { text: 'Exportar para Scrivener' });
+    botaoExportar.addEventListener('click', () => void this.exportarParaScrivener(indice));
 
     const resumo = container.createDiv({ cls: 'contrarius-dashboard-resumo' });
     const totais: Array<[string, number]> = [
