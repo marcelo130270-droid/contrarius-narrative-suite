@@ -4,7 +4,7 @@ import { extrairMetadata, getStr, getStrArray, getStrOuNumero } from './campos';
 const CAMPOS_CONHECIDOS = [
   'consciencia',
   'vida',
-  'nomes',
+  'aliases',
   'nascimento',
   'morte',
   'livro',
@@ -50,7 +50,9 @@ export function normalizarRetrovida(nota: NotaContrariusBruta): ResultadoNormali
     path: nota.path,
     consciencia,
     vida: getStrOuNumero(fm, 'vida'),
-    nomes: getStrArray(fm, 'nomes'),
+    // "nomes" e "aliases" eram duplicados no Vault (migração 2026-07-14, ver CLAUDE.md) — agora só
+    // aliases existe no conteúdo; mantemos a propriedade `nomes` no domínio por clareza semântica.
+    nomes: getStrArray(fm, 'aliases'),
     nascimento: getStr(fm, 'nascimento'),
     morte: getStr(fm, 'morte'),
     livro: getStr(fm, 'livro'),

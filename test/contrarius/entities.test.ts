@@ -58,7 +58,7 @@ describe('normalizarRetrovida', () => {
         tipo: 'Retrovida',
         consciencia: 'C-091',
         vida: 1,
-        nomes: ['Jehanne de Paris', 'Jehanne'],
+        aliases: ['Jehanne de Paris', 'Jehanne'],
         periodo: ['Sec XIII'],
         nucleo_geo: ['Paris'],
         livro: '1 Arles',
