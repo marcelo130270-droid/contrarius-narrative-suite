@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { gerarIndiceEstruturado } from '../../src/contrarius/scrivener-export-estruturado';
+import {
+  gerarIndiceEstruturado,
+  gerarTimelineCronologica,
+  gerarTimelineNarrativa,
+} from '../../src/contrarius/scrivener-export-estruturado';
 import type { IndiceContrarius } from '../../src/contrarius/indexer';
 
 function indiceVazio(): IndiceContrarius {
@@ -39,5 +43,43 @@ describe('gerarIndiceEstruturado', () => {
     indice.consciencias.push({ path: '02_Consciencias/sem-id.md', metadata: {} });
     const md = gerarIndiceEstruturado(indice, DATA_FIXA);
     expect(md).toContain('- [(sem id)](02_Consciencias/sem-id.md)');
+  });
+});
+
+describe('gerarTimelineCronologica', () => {
+  it('ordena eventos por data_inicio e separa os sem data numa seção à parte', () => {
+    const indice = indiceVazio();
+    indice.eventos.push(
+      { path: '05_Eventos/E-002.md', titulo: 'Depois', data_inicio: '1250-01-01', metadata: {} },
+      { path: '05_Eventos/E-001.md', titulo: 'Antes', data_inicio: '1200-01-01', metadata: {} },
+      { path: '05_Eventos/E-003.md', titulo: 'Sem data', metadata: {} },
+    );
+
+    const md = gerarTimelineCronologica(indice, DATA_FIXA);
+    expect(md).toContain('# Contrarius — Timeline cronológica');
+    const posAntes = md.indexOf('Antes');
+    const posDepois = md.indexOf('Depois');
+    expect(posAntes).toBeGreaterThan(0);
+    expect(posAntes).toBeLessThan(posDepois);
+    expect(md).toContain('## Sem data_inicio');
+    expect(md).toContain('[Sem data](05_Eventos/E-003.md)');
+  });
+
+  it('não quebra com nenhum evento', () => {
+    expect(() => gerarTimelineCronologica(indiceVazio(), DATA_FIXA)).not.toThrow();
+  });
+});
+
+describe('gerarTimelineNarrativa', () => {
+  it('ordena por ano_ordem numérico', () => {
+    const indice = indiceVazio();
+    indice.eventos.push(
+      { path: '05_Eventos/E-002.md', titulo: 'Depois', ano_ordem: '10', metadata: {} },
+      { path: '05_Eventos/E-001.md', titulo: 'Antes', ano_ordem: '2', metadata: {} },
+    );
+
+    const md = gerarTimelineNarrativa(indice, DATA_FIXA);
+    expect(md).toContain('# Contrarius — Timeline narrativa');
+    expect(md.indexOf('Antes')).toBeLessThan(md.indexOf('Depois'));
   });
 });

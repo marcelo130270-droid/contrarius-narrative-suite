@@ -1,7 +1,13 @@
 import type { IndiceContrarius } from './indexer';
+import { ordenarEventosParaTimeline, type ModoOrdenacaoTimeline } from './timeline';
+import type { Evento } from './types';
 
 function linhaIndice(rotulo: string, path: string): string {
   return `- [${rotulo}](${path})`;
+}
+
+function rotuloEvento(e: Evento): string {
+  return e.titulo ?? e.num_reg ?? '(sem título)';
 }
 
 // Etapa 14, sub-fase 1: só o índice. Dossiê por tipo e timeline exportável vêm em sub-fases seguintes,
@@ -48,4 +54,40 @@ export function gerarIndiceEstruturado(indice: IndiceContrarius, geradoEm: Date 
   linhas.push('');
 
   return linhas.join('\n');
+}
+
+function gerarTimeline(indice: IndiceContrarius, modo: ModoOrdenacaoTimeline, titulo: string, geradoEm: Date): string {
+  const { comData, semData, campoUsado } = ordenarEventosParaTimeline(indice.eventos, modo);
+  const linhas: string[] = [];
+
+  linhas.push(`# ${titulo}`);
+  linhas.push('');
+  linhas.push(`Gerado em: ${geradoEm.toISOString()}`);
+  linhas.push('');
+  linhas.push(`| ${campoUsado === 'data_inicio' ? 'Data' : 'Ordem'} | Evento | Livro |`);
+  linhas.push('| --- | --- | --- |');
+  for (const e of comData) {
+    linhas.push(`| ${e[campoUsado] ?? ''} | [${rotuloEvento(e)}](${e.path}) | ${e.livro ?? ''} |`);
+  }
+  linhas.push('');
+
+  if (semData.length > 0) {
+    linhas.push(`## Sem ${campoUsado} (não entram na ordenação acima)`);
+    linhas.push('');
+    for (const e of semData) linhas.push(linhaIndice(rotuloEvento(e), e.path));
+    linhas.push('');
+  }
+
+  return linhas.join('\n');
+}
+
+// Etapa 14, sub-fase 2: timeline exportável. `cronologia.md` = ordem histórica/no mundo (data_inicio);
+// `eventos.md` = ordem narrativa, a ordem em que o leitor encontra as cenas (ano_ordem). Reaproveita a
+// mesma ordenação já usada no Dashboard (src/contrarius/timeline.ts), sem duplicar a lógica.
+export function gerarTimelineCronologica(indice: IndiceContrarius, geradoEm: Date = new Date()): string {
+  return gerarTimeline(indice, 'cronologica', 'Contrarius — Timeline cronológica', geradoEm);
+}
+
+export function gerarTimelineNarrativa(indice: IndiceContrarius, geradoEm: Date = new Date()): string {
+  return gerarTimeline(indice, 'narrativa', 'Contrarius — Timeline narrativa (ordem de leitura)', geradoEm);
 }

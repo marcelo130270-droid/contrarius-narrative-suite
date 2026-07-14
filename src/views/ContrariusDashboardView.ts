@@ -7,7 +7,8 @@ import { CAMPOS_AGRUPAVEIS, type EntidadeAgrupavel } from '../contrarius/agrupam
 import { gerarScrivenerImportMarkdown } from '../contrarius/scrivener-export-minimo';
 import { construirPlanoPacoteScrivener, nomePastaPacote } from '../contrarius/scrivener-package-plano';
 import { verificarPacoteScrivener, type ArquivoLidoPacote, type RelatorioVerificacaoPacote } from '../contrarius/scrivener-package-verificacao';
-import { gerarIndiceEstruturado } from '../contrarius/scrivener-export-estruturado';
+import { gerarIndiceEstruturado, gerarTimelineCronologica, gerarTimelineNarrativa } from '../contrarius/scrivener-export-estruturado';
+import { ordenarEventosParaTimeline } from '../contrarius/timeline';
 import type {
   AlertaContrarius,
   Evento,
@@ -174,6 +175,27 @@ export class ContrariusDashboardView extends ItemView {
     }
   }
 
+  private async escreverOuAtualizarArquivo(caminho: string, conteudo: string): Promise<void> {
+    await this.garantirPastas(caminho);
+    const existente = this.app.vault.getAbstractFileByPath(caminho);
+    if (existente instanceof TFile) {
+      await this.app.vault.modify(existente, conteudo);
+    } else {
+      await this.app.vault.create(caminho, conteudo);
+    }
+  }
+
+  // Etapa 14, sub-fase 2: timeline exportável. Dois arquivos sempre reescritos por completo.
+  private async atualizarTimelineExportavel(indice: IndiceContrarius): Promise<void> {
+    try {
+      await this.escreverOuAtualizarArquivo('scrivener/timeline/cronologia.md', gerarTimelineCronologica(indice));
+      await this.escreverOuAtualizarArquivo('scrivener/timeline/eventos.md', gerarTimelineNarrativa(indice));
+      new Notice('Timeline exportável atualizada em scrivener/timeline/.');
+    } catch (erro) {
+      new Notice(`Falha ao atualizar timeline: ${erro instanceof Error ? erro.message : String(erro)}`);
+    }
+  }
+
   // Etapa 12: pacote com manifest/README/integridade. Nome de pasta com timestamp — nunca sobrescreve
   // um pacote anterior. Write simples e sequencial, sem estado de modal: se falhar no meio, a Notice de
   // erro mostra exatamente onde parou, e o pacote parcial fica no disco pra inspeção (não é escondido).
@@ -309,6 +331,9 @@ export class ContrariusDashboardView extends ItemView {
     const botaoIndiceEstruturado = botoes.createEl('button', { text: 'Atualizar índice estruturado' });
     botaoIndiceEstruturado.addEventListener('click', () => void this.atualizarIndiceEstruturado(indice));
 
+    const botaoTimeline = botoes.createEl('button', { text: 'Atualizar timeline exportável' });
+    botaoTimeline.addEventListener('click', () => void this.atualizarTimelineExportavel(indice));
+
     const resumo = container.createDiv({ cls: 'contrarius-dashboard-resumo' });
     const totais: Array<[string, number]> = [
       ['Consciências', indice.consciencias.length],
@@ -440,18 +465,7 @@ export class ContrariusDashboardView extends ItemView {
       this.renderizar();
     });
 
-    const chaveOrdenacao = this.modoTimeline === 'cronologica' ? 'data_inicio' : 'ano_ordem';
-    const comData = indice.eventos.filter((e) => e[chaveOrdenacao]);
-    const semData = indice.eventos.filter((e) => !e[chaveOrdenacao]);
-
-    comData.sort((a, b) => {
-      const va = a[chaveOrdenacao] as string;
-      const vb = b[chaveOrdenacao] as string;
-      const na = Number(va);
-      const nb = Number(vb);
-      if (!Number.isNaN(na) && !Number.isNaN(nb)) return na - nb;
-      return va.localeCompare(vb);
-    });
+    const { comData, semData, campoUsado: chaveOrdenacao } = ordenarEventosParaTimeline(indice.eventos, this.modoTimeline);
 
     if (comData.length === 0) {
       secao.createEl('p', { text: 'Nenhum evento com dados suficientes para esta ordem.' });
