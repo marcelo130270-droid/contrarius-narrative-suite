@@ -6,6 +6,8 @@ import {
   gerarDossieRelacoes,
   gerarDossieRetrovidas,
   gerarIndiceEstruturado,
+  gerarIndicePorLivro,
+  gerarIndicePorPeriodo,
   gerarTimelineCronologica,
   gerarTimelineNarrativa,
 } from '../../src/contrarius/scrivener-export-estruturado';
@@ -116,5 +118,36 @@ describe('dossiês por tipo', () => {
     expect(() => gerarDossieEventos(indice, DATA_FIXA)).not.toThrow();
     expect(() => gerarDossieLugares(indice, DATA_FIXA)).not.toThrow();
     expect(() => gerarDossieRelacoes(indice, DATA_FIXA)).not.toThrow();
+  });
+});
+
+describe('gerarIndicePorLivro e gerarIndicePorPeriodo', () => {
+  it('agrupa retrovidas e eventos por livro, com cada grupo como seção própria', () => {
+    const indice = indiceVazio();
+    indice.retrovidas.push({ path: '03_Retrovidas/R-001.md', nomes: ['Fulano'], livro: 'Livro 1', metadata: {} });
+    indice.eventos.push({ path: '05_Eventos/E-001.md', titulo: 'Evento X', livro: 'Livro 1', metadata: {} });
+    indice.retrovidas.push({ path: '03_Retrovidas/R-002.md', nomes: ['Beltrano'], livro: 'Livro 2', metadata: {} });
+
+    const md = gerarIndicePorLivro(indice, DATA_FIXA);
+    expect(md).toContain('# Contrarius — Índice por livro');
+    expect(md).toContain('## Livro 1');
+    expect(md).toContain('## Livro 2');
+    expect(md).toContain('- [Fulano](03_Retrovidas/R-001.md)');
+    expect(md).toContain('- [Evento X](05_Eventos/E-001.md)');
+  });
+
+  it('agrupa por período', () => {
+    const indice = indiceVazio();
+    indice.retrovidas.push({ path: '03_Retrovidas/R-001.md', nomes: ['Fulano'], periodo: ['Sec XIII'], metadata: {} });
+
+    const md = gerarIndicePorPeriodo(indice, DATA_FIXA);
+    expect(md).toContain('# Contrarius — Índice por período');
+    expect(md).toContain('## Sec XIII');
+    expect(md).toContain('- [Fulano](03_Retrovidas/R-001.md)');
+  });
+
+  it('não lança exceção com índice vazio', () => {
+    expect(() => gerarIndicePorLivro(indiceVazio(), DATA_FIXA)).not.toThrow();
+    expect(() => gerarIndicePorPeriodo(indiceVazio(), DATA_FIXA)).not.toThrow();
   });
 });

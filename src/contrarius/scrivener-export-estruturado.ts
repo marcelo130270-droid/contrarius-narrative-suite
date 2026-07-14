@@ -8,6 +8,7 @@ import {
   blocoRelacao,
   blocoRetrovida,
 } from './scrivener-export-minimo';
+import { CAMPOS_AGRUPAVEIS, rotuloEntidade } from './agrupamento';
 
 function linhaIndice(rotulo: string, path: string): string {
   return `- [${rotulo}](${path})`;
@@ -134,4 +135,31 @@ export function gerarDossieRelacoes(indice: IndiceContrarius, geradoEm: Date = n
   const linhas = cabecalhoDossie('Contrarius — Dossiê de Relações', geradoEm);
   indice.relacoes.forEach((r, i) => linhas.push(...blocoRelacao(r, i)));
   return linhas.join('\n');
+}
+
+// Etapa 14, sub-fase 4 (última): índices por livro/período. Reaproveita o mesmo registro
+// CAMPOS_AGRUPAVEIS já usado no Dashboard (Visões) — não duplica a lógica de agrupamento pela terceira vez.
+function gerarIndicePorCampo(indice: IndiceContrarius, chaveCampo: string, titulo: string, geradoEm: Date): string {
+  const campo = CAMPOS_AGRUPAVEIS.find((c) => c.chave === chaveCampo);
+  const linhas = cabecalhoDossie(titulo, geradoEm);
+  if (!campo) return linhas.join('\n');
+
+  const mapa = campo.extrair(indice);
+  const chaves = [...mapa.keys()].sort((a, b) => a.localeCompare(b));
+  for (const chave of chaves) {
+    linhas.push(`## ${chave}`);
+    linhas.push('');
+    const itens = [...(mapa.get(chave) ?? [])].sort((a, b) => rotuloEntidade(a).localeCompare(rotuloEntidade(b)));
+    for (const item of itens) linhas.push(linhaIndice(rotuloEntidade(item), item.path));
+    linhas.push('');
+  }
+  return linhas.join('\n');
+}
+
+export function gerarIndicePorLivro(indice: IndiceContrarius, geradoEm: Date = new Date()): string {
+  return gerarIndicePorCampo(indice, 'livro', 'Contrarius — Índice por livro', geradoEm);
+}
+
+export function gerarIndicePorPeriodo(indice: IndiceContrarius, geradoEm: Date = new Date()): string {
+  return gerarIndicePorCampo(indice, 'periodo', 'Contrarius — Índice por período', geradoEm);
 }

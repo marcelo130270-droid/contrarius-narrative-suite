@@ -3,6 +3,14 @@ import type { Consciencia, Evento, Lugar, Retrovida } from './types';
 
 export type EntidadeAgrupavel = Consciencia | Retrovida | Evento | Lugar;
 
+export function rotuloEntidade(item: EntidadeAgrupavel): string {
+  if ('titulo' in item && item.titulo) return item.titulo;
+  if ('nomes' in item && item.nomes && item.nomes.length > 0) return item.nomes[0];
+  if ('nome_atual' in item && item.nome_atual) return item.nome_atual;
+  const segmento = item.path.split('/').pop() ?? item.path;
+  return segmento.endsWith('.md') ? segmento.slice(0, -3) : segmento;
+}
+
 export function agruparPorCampo<T>(
   itens: readonly T[],
   obterChaves: (item: T) => string | string[] | undefined,

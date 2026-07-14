@@ -3,7 +3,7 @@ import StorytellerSuitePlugin from '../main';
 import { indexarVaultContrarius, type IndiceContrarius } from '../contrarius/indexer';
 import { validarIndiceContrarius } from '../contrarius/validator';
 import { classificarColecaoContrariusPorCaminho } from '../contrarius/reader';
-import { CAMPOS_AGRUPAVEIS, type EntidadeAgrupavel } from '../contrarius/agrupamento';
+import { CAMPOS_AGRUPAVEIS, rotuloEntidade } from '../contrarius/agrupamento';
 import { gerarScrivenerImportMarkdown } from '../contrarius/scrivener-export-minimo';
 import { construirPlanoPacoteScrivener, nomePastaPacote } from '../contrarius/scrivener-package-plano';
 import { verificarPacoteScrivener, type ArquivoLidoPacote, type RelatorioVerificacaoPacote } from '../contrarius/scrivener-package-verificacao';
@@ -14,6 +14,8 @@ import {
   gerarDossieRelacoes,
   gerarDossieRetrovidas,
   gerarIndiceEstruturado,
+  gerarIndicePorLivro,
+  gerarIndicePorPeriodo,
   gerarTimelineCronologica,
   gerarTimelineNarrativa,
 } from '../contrarius/scrivener-export-estruturado';
@@ -31,14 +33,6 @@ const ORDEM_SEVERIDADE: SeveridadeAlertaContrarius[] = ['erro', 'aviso', 'info']
 const TODAS_SEVERIDADES: SeveridadeAlertaContrarius[] = ['erro', 'aviso', 'info'];
 const COLECOES_FILTRAVEIS: TipoColecaoContrarius[] = ['consciencias', 'retrovidas', 'eventos', 'lugares', 'relacoes'];
 const LIMITE_ALERTAS_EXIBIDOS = 50;
-
-function rotuloEntidade(item: EntidadeAgrupavel): string {
-  if ('titulo' in item && item.titulo) return item.titulo;
-  if ('nomes' in item && item.nomes && item.nomes.length > 0) return item.nomes[0];
-  if ('nome_atual' in item && item.nome_atual) return item.nome_atual;
-  const segmento = item.path.split('/').pop() ?? item.path;
-  return segmento.endsWith('.md') ? segmento.slice(0, -3) : segmento;
-}
 
 type ModoTimeline = 'cronologica' | 'narrativa';
 
@@ -219,6 +213,17 @@ export class ContrariusDashboardView extends ItemView {
     }
   }
 
+  // Etapa 14, sub-fase 4 (última): índices por livro/período.
+  private async atualizarIndicesPorCampo(indice: IndiceContrarius): Promise<void> {
+    try {
+      await this.escreverOuAtualizarArquivo('scrivener/indices/por-livro.md', gerarIndicePorLivro(indice));
+      await this.escreverOuAtualizarArquivo('scrivener/indices/por-periodo.md', gerarIndicePorPeriodo(indice));
+      new Notice('Índices por livro/período atualizados em scrivener/indices/.');
+    } catch (erro) {
+      new Notice(`Falha ao atualizar índices: ${erro instanceof Error ? erro.message : String(erro)}`);
+    }
+  }
+
   // Etapa 12: pacote com manifest/README/integridade. Nome de pasta com timestamp — nunca sobrescreve
   // um pacote anterior. Write simples e sequencial, sem estado de modal: se falhar no meio, a Notice de
   // erro mostra exatamente onde parou, e o pacote parcial fica no disco pra inspeção (não é escondido).
@@ -359,6 +364,9 @@ export class ContrariusDashboardView extends ItemView {
 
     const botaoDossies = botoes.createEl('button', { text: 'Atualizar dossiês' });
     botaoDossies.addEventListener('click', () => void this.atualizarDossies(indice));
+
+    const botaoIndicesCampo = botoes.createEl('button', { text: 'Atualizar índices por livro/período' });
+    botaoIndicesCampo.addEventListener('click', () => void this.atualizarIndicesPorCampo(indice));
 
     const resumo = container.createDiv({ cls: 'contrarius-dashboard-resumo' });
     const totais: Array<[string, number]> = [

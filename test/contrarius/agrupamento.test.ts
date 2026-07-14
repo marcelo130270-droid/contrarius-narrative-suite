@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { indexarVaultContrarius } from '../../src/contrarius/indexer';
-import { agruparPorCampo, CAMPOS_AGRUPAVEIS } from '../../src/contrarius/agrupamento';
+import { agruparPorCampo, CAMPOS_AGRUPAVEIS, rotuloEntidade } from '../../src/contrarius/agrupamento';
 import type {
   ArquivoMarkdownContrariusLike,
   CacheArquivoContrariusLike,
@@ -85,5 +85,14 @@ describe('CAMPOS_AGRUPAVEIS', () => {
 
     const porIdentExtraf = CAMPOS_AGRUPAVEIS.find((c) => c.chave === 'identExtraf')!.extrair(indice);
     expect(porIdentExtraf.get('X')).toHaveLength(2);
+  });
+});
+
+describe('rotuloEntidade', () => {
+  it('prioriza titulo (Evento), depois nomes[0] (Retrovida), depois nome_atual (Lugar), depois basename', () => {
+    expect(rotuloEntidade({ path: '05_Eventos/E-001.md', titulo: 'Evento X', metadata: {} })).toBe('Evento X');
+    expect(rotuloEntidade({ path: '03_Retrovidas/R-001.md', nomes: ['Fulano'], metadata: {} })).toBe('Fulano');
+    expect(rotuloEntidade({ path: '06_Lugares/L-001.md', nome_atual: 'Roma', metadata: {} })).toBe('Roma');
+    expect(rotuloEntidade({ path: '02_Consciencias/C-001.md', id: 'C-001', metadata: {} })).toBe('C-001');
   });
 });
