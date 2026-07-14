@@ -5,6 +5,7 @@ import { validarIndiceContrarius } from '../contrarius/validator';
 import { classificarColecaoContrariusPorCaminho } from '../contrarius/reader';
 import { CAMPOS_AGRUPAVEIS, type EntidadeAgrupavel } from '../contrarius/agrupamento';
 import { gerarScrivenerImportMarkdown } from '../contrarius/scrivener-export-minimo';
+import { construirPlanoPacoteScrivener, nomePastaPacote } from '../contrarius/scrivener-package-plano';
 import type {
   AlertaContrarius,
   Evento,
@@ -151,6 +152,36 @@ export class ContrariusDashboardView extends ItemView {
     }
   }
 
+  // Etapa 12: pacote com manifest/README/integridade. Nome de pasta com timestamp — nunca sobrescreve
+  // um pacote anterior. Write simples e sequencial, sem estado de modal: se falhar no meio, a Notice de
+  // erro mostra exatamente onde parou, e o pacote parcial fica no disco pra inspeção (não é escondido).
+  private async exportarPacoteScrivener(indice: IndiceContrarius): Promise<void> {
+    const pasta = nomePastaPacote(new Date());
+    try {
+      const plano = construirPlanoPacoteScrivener(indice);
+      for (const arquivo of plano) {
+        const caminhoCompleto = `${pasta}/${arquivo.caminhoRelativo}`;
+        await this.garantirPastas(caminhoCompleto);
+        await this.app.vault.create(caminhoCompleto, arquivo.conteudo);
+      }
+      new Notice(`Pacote Scrivener exportado em ${pasta}/.`);
+    } catch (erro) {
+      new Notice(`Falha ao exportar pacote (parou em ${pasta}/): ${erro instanceof Error ? erro.message : String(erro)}`);
+    }
+  }
+
+  private async garantirPastas(caminhoArquivo: string): Promise<void> {
+    const segmentos = caminhoArquivo.split('/');
+    segmentos.pop();
+    let acumulado = '';
+    for (const segmento of segmentos) {
+      acumulado = acumulado ? `${acumulado}/${segmento}` : segmento;
+      if (!this.app.vault.getAbstractFileByPath(acumulado)) {
+        await this.app.vault.createFolder(acumulado);
+      }
+    }
+  }
+
   private renderizar(): void {
     const indice = this.indice;
     if (!indice) return;
@@ -177,6 +208,9 @@ export class ContrariusDashboardView extends ItemView {
 
     const botaoExportar = botoes.createEl('button', { text: 'Exportar para Scrivener' });
     botaoExportar.addEventListener('click', () => void this.exportarParaScrivener(indice));
+
+    const botaoExportarPacote = botoes.createEl('button', { text: 'Exportar pacote Scrivener' });
+    botaoExportarPacote.addEventListener('click', () => void this.exportarPacoteScrivener(indice));
 
     const resumo = container.createDiv({ cls: 'contrarius-dashboard-resumo' });
     const totais: Array<[string, number]> = [
