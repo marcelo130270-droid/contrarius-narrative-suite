@@ -207,24 +207,31 @@ export class ContrariusDashboardView extends ItemView {
   }
 
   private async verificarUltimoPacote(): Promise<void> {
-    const pasta = this.encontrarPastaPacoteMaisRecente();
-    if (!pasta) {
-      this.ultimaVerificacao = {
-        pasta: '(nenhuma)',
-        relatorio: {
-          pacoteEncontrado: false,
-          manifestoValido: false,
-          itens: [],
-          resumo: 'Nenhuma pasta scrivener-package/ encontrada no Vault. Exporte um pacote primeiro.',
-        },
-      };
+    new Notice('Verificando pacote Scrivener...');
+    try {
+      const pasta = this.encontrarPastaPacoteMaisRecente();
+      if (!pasta) {
+        this.ultimaVerificacao = {
+          pasta: '(nenhuma)',
+          relatorio: {
+            pacoteEncontrado: false,
+            manifestoValido: false,
+            itens: [],
+            resumo: 'Nenhuma pasta scrivener-package/ encontrada no Vault. Exporte um pacote primeiro.',
+          },
+        };
+        new Notice(this.ultimaVerificacao.relatorio.resumo);
+        this.renderizar();
+        return;
+      }
+      const arquivos = await this.lerArquivosPacote(pasta);
+      const relatorio = verificarPacoteScrivener(arquivos);
+      this.ultimaVerificacao = { pasta, relatorio };
+      new Notice(relatorio.resumo);
       this.renderizar();
-      return;
+    } catch (erro) {
+      new Notice(`Erro ao verificar: ${erro instanceof Error ? erro.message : String(erro)}`);
     }
-    const arquivos = await this.lerArquivosPacote(pasta);
-    const relatorio = verificarPacoteScrivener(arquivos);
-    this.ultimaVerificacao = { pasta, relatorio };
-    this.renderizar();
   }
 
   private renderizarVerificacao(container: HTMLElement): void {
