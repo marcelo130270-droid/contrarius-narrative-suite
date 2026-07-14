@@ -3,11 +3,10 @@ import StorytellerSuitePlugin from '../main';
 import { indexarVaultContrarius, type IndiceContrarius } from '../contrarius/indexer';
 import { validarIndiceContrarius } from '../contrarius/validator';
 import { classificarColecaoContrariusPorCaminho } from '../contrarius/reader';
+import { CAMPOS_AGRUPAVEIS, type EntidadeAgrupavel } from '../contrarius/agrupamento';
 import type {
   AlertaContrarius,
   Evento,
-  Lugar,
-  Retrovida,
   SeveridadeAlertaContrarius,
   TipoColecaoContrarius,
 } from '../contrarius/types';
@@ -19,15 +18,7 @@ const TODAS_SEVERIDADES: SeveridadeAlertaContrarius[] = ['erro', 'aviso', 'info'
 const COLECOES_FILTRAVEIS: TipoColecaoContrarius[] = ['consciencias', 'retrovidas', 'eventos', 'lugares', 'relacoes'];
 const LIMITE_ALERTAS_EXIBIDOS = 50;
 
-type DimensaoVisao = 'livro' | 'periodo' | 'nucleoGeo';
-
-const ROTULO_DIMENSAO: Record<DimensaoVisao, string> = {
-  livro: 'Livro',
-  periodo: 'Período',
-  nucleoGeo: 'Núcleo geográfico',
-};
-
-function rotuloEntidade(item: Retrovida | Evento | Lugar): string {
+function rotuloEntidade(item: EntidadeAgrupavel): string {
   if ('titulo' in item && item.titulo) return item.titulo;
   if ('nomes' in item && item.nomes && item.nomes.length > 0) return item.nomes[0];
   if ('nome_atual' in item && item.nome_atual) return item.nome_atual;
@@ -76,7 +67,7 @@ export class ContrariusDashboardView extends ItemView {
   private alertas: AlertaContrarius[] = [];
   private filtroSeveridades: Set<SeveridadeAlertaContrarius> = new Set(TODAS_SEVERIDADES);
   private filtroColecoes: Set<TipoColecaoContrarius> = new Set(COLECOES_FILTRAVEIS);
-  private dimensaoVisao: DimensaoVisao = 'livro';
+  private dimensaoVisao: string = CAMPOS_AGRUPAVEIS[0].chave;
   private modoTimeline: ModoTimeline = 'cronologica';
 
   constructor(leaf: WorkspaceLeaf, plugin: StorytellerSuitePlugin) {
@@ -251,17 +242,17 @@ export class ContrariusDashboardView extends ItemView {
     secaoVisoes.createEl('h3', { text: 'Visões narrativas' });
 
     const seletor = secaoVisoes.createEl('select');
-    for (const dimensao of Object.keys(ROTULO_DIMENSAO) as DimensaoVisao[]) {
-      const opcao = seletor.createEl('option', { text: ROTULO_DIMENSAO[dimensao], value: dimensao });
-      if (dimensao === this.dimensaoVisao) opcao.selected = true;
+    for (const campo of CAMPOS_AGRUPAVEIS) {
+      const opcao = seletor.createEl('option', { text: campo.rotulo, value: campo.chave });
+      if (campo.chave === this.dimensaoVisao) opcao.selected = true;
     }
     seletor.addEventListener('change', () => {
-      this.dimensaoVisao = seletor.value as DimensaoVisao;
+      this.dimensaoVisao = seletor.value;
       this.renderizar();
     });
 
-    const mapa =
-      this.dimensaoVisao === 'livro' ? indice.porLivro : this.dimensaoVisao === 'periodo' ? indice.porPeriodo : indice.porNucleoGeo;
+    const campoSelecionado = CAMPOS_AGRUPAVEIS.find((c) => c.chave === this.dimensaoVisao) ?? CAMPOS_AGRUPAVEIS[0];
+    const mapa = campoSelecionado.extrair(indice);
 
     if (mapa.size === 0) {
       secaoVisoes.createEl('p', { text: 'Nenhum dado para esta visão.' });

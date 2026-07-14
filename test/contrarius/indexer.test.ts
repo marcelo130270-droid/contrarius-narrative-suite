@@ -64,22 +64,6 @@ describe('indexarVaultContrarius', () => {
     expect(indice.porId.has('inexistente')).toBe(false);
   });
 
-  it('agrupa por livro e período (retrovida + evento) e núcleo geográfico (retrovida + evento + lugar)', async () => {
-    const { vault, cache } = makeVaultECache({
-      '03_Retrovidas/R-001.md': { consciencia: 'C-001', livro: 'Livro 1', periodo: ['Sec I'], nucleo_geo: ['Roma'] },
-      '05_Eventos/E-001.md': { codigo: 'E-001', livro: 'Livro 1', periodo: ['Sec II'], retrovidas: ['C-001'] },
-      '06_Lugares/L-001.md': { codigo: 'L-001', nome_atual: 'Roma', nucleo_geo: ['Mediterrâneo'] },
-    });
-
-    const indice = await indexarVaultContrarius(vault, cache);
-
-    expect(indice.porLivro.get('Livro 1')).toHaveLength(2);
-    expect(indice.porPeriodo.get('Sec I')).toHaveLength(1);
-    expect(indice.porPeriodo.get('Sec II')).toHaveLength(1);
-    expect(indice.porNucleoGeo.get('Roma')).toHaveLength(1);
-    expect(indice.porNucleoGeo.get('Mediterrâneo')).toHaveLength(1);
-  });
-
   it('é determinístico: mesma entrada produz a mesma ordem de saída', async () => {
     const { vault, cache } = makeVaultECache({
       '02_Consciencias/C-002.md': { id: 'C-002' },

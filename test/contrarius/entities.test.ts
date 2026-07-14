@@ -42,6 +42,13 @@ describe('normalizarConsciencia', () => {
   it('não lança exceção com frontmatter vazio', () => {
     expect(() => normalizarConsciencia(nota('02_Consciencias/vazio.md', {}))).not.toThrow();
   });
+
+  it('lê grupocarma como array (uma consciência pode pertencer a vários grupos)', () => {
+    const { entidade } = normalizarConsciencia(
+      nota('02_Consciencias/C-001.md', { id: 'C-001', grupocarma: ['Cruzados de Montpaon', 'Família Del Vignal'] }),
+    );
+    expect(entidade.grupocarma).toEqual(['Cruzados de Montpaon', 'Família Del Vignal']);
+  });
 });
 
 describe('normalizarRetrovida', () => {
@@ -81,6 +88,13 @@ describe('normalizarRetrovida', () => {
   it('gera aviso para historicidade fora do esperado', () => {
     const { alertas } = normalizarRetrovida(nota('03_Retrovidas/R-003.md', { consciencia: 'C-001', historicidade: 'desconhecido' }));
     expect(alertas).toContainEqual(expect.objectContaining({ severidade: 'aviso', campo: 'historicidade' }));
+  });
+
+  it('lê grupocarma como array', () => {
+    const { entidade } = normalizarRetrovida(
+      nota('03_Retrovidas/R-004.md', { consciencia: 'C-001', grupocarma: ['Cruzados de Montpaon'] }),
+    );
+    expect(entidade.grupocarma).toEqual(['Cruzados de Montpaon']);
   });
 });
 

@@ -98,6 +98,82 @@ function validarLivroEPeriodo(indice: IndiceContrarius): AlertaContrarius[] {
   return alertas;
 }
 
+function normalizarGrupocarma(valor: string): string {
+  return valor
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, ' ');
+}
+
+// Distância de Levenshtein clássica (DP), sem dependência externa.
+function distanciaLevenshtein(a: string, b: string): number {
+  const linhas = a.length + 1;
+  const colunas = b.length + 1;
+  const dp: number[][] = Array.from({ length: linhas }, () => new Array<number>(colunas).fill(0));
+  for (let i = 0; i < linhas; i++) dp[i][0] = i;
+  for (let j = 0; j < colunas; j++) dp[0][j] = j;
+  for (let i = 1; i < linhas; i++) {
+    for (let j = 1; j < colunas; j++) {
+      const custo = a[i - 1] === b[j - 1] ? 0 : 1;
+      dp[i][j] = Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + custo);
+    }
+  }
+  return dp[a.length][b.length];
+}
+
+// Alerta quando dois valores de grupocarma são parecidos mas não idênticos — provável erro de
+// digitação que quebraria o agrupamento silenciosamente (não há nota dedicada por grupo pra corrigir).
+function detectarGrupocarmaSimilares(indice: IndiceContrarius): AlertaContrarius[] {
+  const ocorrencias = new Map<string, string>(); // valor original -> primeiro path que o usa
+  for (const consciencia of indice.consciencias) {
+    for (const valor of consciencia.grupocarma ?? []) {
+      if (!ocorrencias.has(valor)) ocorrencias.set(valor, consciencia.path);
+    }
+  }
+  for (const retrovida of indice.retrovidas) {
+    for (const valor of retrovida.grupocarma ?? []) {
+      if (!ocorrencias.has(valor)) ocorrencias.set(valor, retrovida.path);
+    }
+  }
+
+  const valores = [...ocorrencias.keys()];
+  const alertas: AlertaContrarius[] = [];
+  const paresJaAlertados = new Set<string>();
+
+  for (let i = 0; i < valores.length; i++) {
+    for (let j = i + 1; j < valores.length; j++) {
+      const a = valores[i];
+      const b = valores[j];
+      const na = normalizarGrupocarma(a);
+      const nb = normalizarGrupocarma(b);
+      if (na === nb) continue;
+      const distancia = distanciaLevenshtein(na, nb);
+      const limiar = Math.ceil(Math.max(na.length, nb.length) * 0.2);
+      if (distancia === 0 || distancia > limiar) continue;
+
+      const chavePar = [a, b].sort().join('|');
+      if (paresJaAlertados.has(chavePar)) continue;
+      paresJaAlertados.add(chavePar);
+
+      alertas.push({
+        severidade: 'aviso',
+        path: ocorrencias.get(a)!,
+        campo: 'grupocarma',
+        mensagem: `Grupo cármico "${a}" é parecido com "${b}" (usado em outra nota) — possível erro de digitação.`,
+      });
+      alertas.push({
+        severidade: 'aviso',
+        path: ocorrencias.get(b)!,
+        campo: 'grupocarma',
+        mensagem: `Grupo cármico "${b}" é parecido com "${a}" (usado em outra nota) — possível erro de digitação.`,
+      });
+    }
+  }
+  return alertas;
+}
+
 export function validarIndiceContrarius(indice: IndiceContrarius): AlertaContrarius[] {
   return [
     ...detectarIdsDuplicados(indice),
@@ -105,5 +181,6 @@ export function validarIndiceContrarius(indice: IndiceContrarius): AlertaContrar
     ...validarRetrovidasDeEventos(indice),
     ...validarLocalDeEventos(indice),
     ...validarLivroEPeriodo(indice),
+    ...detectarGrupocarmaSimilares(indice),
   ];
 }

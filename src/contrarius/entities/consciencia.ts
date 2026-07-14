@@ -1,5 +1,5 @@
 import type { AlertaContrarius, Consciencia, NotaContrariusBruta, ResultadoNormalizacao } from '../types';
-import { extrairMetadata, getStr } from './campos';
+import { extrairMetadata, getStr, getStrArray } from './campos';
 
 const CAMPOS_CONHECIDOS = ['id', 'ident_extraf', 'historicidade', 'grupocarma'] as const;
 
@@ -19,7 +19,7 @@ export function normalizarConsciencia(nota: NotaContrariusBruta): ResultadoNorma
     id,
     ident_extraf: getStr(fm, 'ident_extraf'),
     historicidade: getStr(fm, 'historicidade'),
-    grupocarma: getStr(fm, 'grupocarma'),
+    grupocarma: getStrArray(fm, 'grupocarma'),
     metadata: extrairMetadata(fm, CAMPOS_CONHECIDOS),
   };
 

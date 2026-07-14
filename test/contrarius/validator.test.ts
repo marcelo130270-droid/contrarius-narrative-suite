@@ -123,4 +123,30 @@ describe('validarIndiceContrarius', () => {
     const indice = await indexarVaultContrarius(vault, cache);
     expect(validarIndiceContrarius(indice)).toEqual([]);
   });
+
+  it('detecta grupocarma parecido mas não idêntico (provável erro de digitação)', async () => {
+    const { vault, cache } = makeVaultECache({
+      '02_Consciencias/C-001.md': { id: 'C-001', grupocarma: ['Cruzados de Montpaon'] },
+      '02_Consciencias/C-002.md': { id: 'C-002', grupocarma: ['Cruzados Montpaon'] },
+    });
+
+    const indice = await indexarVaultContrarius(vault, cache);
+    const alertas = validarIndiceContrarius(indice);
+    const avisosGrupocarma = alertas.filter((a) => a.campo === 'grupocarma');
+
+    expect(avisosGrupocarma).toHaveLength(2);
+    expect(avisosGrupocarma.every((a) => a.severidade === 'aviso')).toBe(true);
+  });
+
+  it('não alerta grupocarma idêntico, nem valores completamente diferentes', async () => {
+    const { vault, cache } = makeVaultECache({
+      '02_Consciencias/C-001.md': { id: 'C-001', grupocarma: ['Cruzados de Montpaon'] },
+      '02_Consciencias/C-002.md': { id: 'C-002', grupocarma: ['Cruzados de Montpaon', 'Família Del Vignal'] },
+    });
+
+    const indice = await indexarVaultContrarius(vault, cache);
+    const alertas = validarIndiceContrarius(indice);
+
+    expect(alertas.filter((a) => a.campo === 'grupocarma')).toHaveLength(0);
+  });
 });

@@ -29,27 +29,10 @@ export interface IndiceContrarius {
   relacoes: Relacao[];
   alertas: AlertaContrarius[];
   porId: Map<string, Consciencia | Evento | Lugar>;
-  porLivro: Map<string, Array<Retrovida | Evento>>;
-  porPeriodo: Map<string, Array<Retrovida | Evento>>;
-  porNucleoGeo: Map<string, Array<Retrovida | Evento | Lugar>>;
 }
 
 function porCaminho<T extends { path: string }>(a: T, b: T): number {
   return a.path.localeCompare(b.path);
-}
-
-function agruparPorCampo<T>(itens: readonly T[], obterChaves: (item: T) => string | string[] | undefined): Map<string, T[]> {
-  const mapa = new Map<string, T[]>();
-  for (const item of itens) {
-    const bruto = obterChaves(item);
-    const chaves = Array.isArray(bruto) ? bruto : bruto ? [bruto] : [];
-    for (const chave of chaves) {
-      const atual = mapa.get(chave);
-      if (atual) atual.push(item);
-      else mapa.set(chave, [item]);
-    }
-  }
-  return mapa;
 }
 
 function notasDaColecao(notas: readonly NotaContrariusBruta[], colecao: TipoColecaoContrarius): NotaContrariusBruta[] {
@@ -101,12 +84,5 @@ export async function indexarVaultContrarius<TArquivo extends ArquivoMarkdownCon
   for (const evento of eventos) if (evento.codigo) porId.set(evento.codigo, evento);
   for (const lugar of lugares) if (lugar.codigo) porId.set(lugar.codigo, lugar);
 
-  const porLivro = agruparPorCampo<Retrovida | Evento>([...retrovidas, ...eventos], (item) => item.livro);
-  const porPeriodo = agruparPorCampo<Retrovida | Evento>([...retrovidas, ...eventos], (item) => item.periodo);
-  const porNucleoGeo = agruparPorCampo<Retrovida | Evento | Lugar>(
-    [...retrovidas, ...eventos, ...lugares],
-    (item) => item.nucleo_geo,
-  );
-
-  return { consciencias, retrovidas, eventos, lugares, relacoes, alertas, porId, porLivro, porPeriodo, porNucleoGeo };
+  return { consciencias, retrovidas, eventos, lugares, relacoes, alertas, porId };
 }

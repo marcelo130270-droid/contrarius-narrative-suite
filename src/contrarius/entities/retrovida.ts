@@ -14,6 +14,7 @@ const CAMPOS_CONHECIDOS = [
   'historicidade',
   'holopensenes',
   'religiao',
+  'grupocarma',
 ] as const;
 
 // Valores observados no Vault real: "Ficticio", "Real", "Lendario" (com/sem acento, capitalização variável).
@@ -59,6 +60,7 @@ export function normalizarRetrovida(nota: NotaContrariusBruta): ResultadoNormali
     historicidade,
     holopensenes: getStrArray(fm, 'holopensenes'),
     religiao: getStrArray(fm, 'religiao'),
+    grupocarma: getStrArray(fm, 'grupocarma'),
     metadata: extrairMetadata(fm, CAMPOS_CONHECIDOS),
   };
 

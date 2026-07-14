@@ -27,7 +27,9 @@ export interface Consciencia {
   id?: string;
   ident_extraf?: string;
   historicidade?: string;
-  grupocarma?: string;
+  // Uma consciência pode pertencer a vários grupos cármicos ao mesmo tempo — array, não valor único.
+  // Sem nota dedicada por grupo: o agrupamento é por valor compartilhado (ver agrupamento.ts).
+  grupocarma?: string[];
   metadata: Record<string, unknown>;
 }
 
@@ -45,6 +47,7 @@ export interface Retrovida {
   historicidade?: string;
   holopensenes?: string[];
   religiao?: string[];
+  grupocarma?: string[];
   metadata: Record<string, unknown>;
 }
 
