@@ -7,6 +7,7 @@ import { CAMPOS_AGRUPAVEIS, type EntidadeAgrupavel } from '../contrarius/agrupam
 import { gerarScrivenerImportMarkdown } from '../contrarius/scrivener-export-minimo';
 import { construirPlanoPacoteScrivener, nomePastaPacote } from '../contrarius/scrivener-package-plano';
 import { verificarPacoteScrivener, type ArquivoLidoPacote, type RelatorioVerificacaoPacote } from '../contrarius/scrivener-package-verificacao';
+import { gerarIndiceEstruturado } from '../contrarius/scrivener-export-estruturado';
 import type {
   AlertaContrarius,
   Evento,
@@ -154,6 +155,25 @@ export class ContrariusDashboardView extends ItemView {
     }
   }
 
+  // Etapa 14, sub-fase 1: índice estruturado, sempre reescrito por completo em scrivener/index.md
+  // (mesmo mecanismo simples de create/modify da Etapa 11 — dossiê e timeline vêm em sub-fases futuras).
+  private async atualizarIndiceEstruturado(indice: IndiceContrarius): Promise<void> {
+    const CAMINHO = 'scrivener/index.md';
+    try {
+      const conteudo = gerarIndiceEstruturado(indice);
+      await this.garantirPastas(CAMINHO);
+      const existente = this.app.vault.getAbstractFileByPath(CAMINHO);
+      if (existente instanceof TFile) {
+        await this.app.vault.modify(existente, conteudo);
+      } else {
+        await this.app.vault.create(CAMINHO, conteudo);
+      }
+      new Notice(`Índice estruturado atualizado em ${CAMINHO}.`);
+    } catch (erro) {
+      new Notice(`Falha ao atualizar índice: ${erro instanceof Error ? erro.message : String(erro)}`);
+    }
+  }
+
   // Etapa 12: pacote com manifest/README/integridade. Nome de pasta com timestamp — nunca sobrescreve
   // um pacote anterior. Write simples e sequencial, sem estado de modal: se falhar no meio, a Notice de
   // erro mostra exatamente onde parou, e o pacote parcial fica no disco pra inspeção (não é escondido).
@@ -285,6 +305,9 @@ export class ContrariusDashboardView extends ItemView {
 
     const botaoVerificar = botoes.createEl('button', { text: 'Verificar último pacote' });
     botaoVerificar.addEventListener('click', () => void this.verificarUltimoPacote());
+
+    const botaoIndiceEstruturado = botoes.createEl('button', { text: 'Atualizar índice estruturado' });
+    botaoIndiceEstruturado.addEventListener('click', () => void this.atualizarIndiceEstruturado(indice));
 
     const resumo = container.createDiv({ cls: 'contrarius-dashboard-resumo' });
     const totais: Array<[string, number]> = [
