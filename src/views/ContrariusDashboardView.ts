@@ -334,26 +334,25 @@ export class ContrariusDashboardView extends ItemView {
 
     if (alertasFiltrados.length === 0) {
       secaoAlertas.createEl('p', { text: 'Nenhum alerta com os filtros atuais.' });
-      return;
-    }
+    } else {
+      const alertasOrdenados = [...alertasFiltrados].sort(
+        (a, b) => ORDEM_SEVERIDADE.indexOf(a.severidade) - ORDEM_SEVERIDADE.indexOf(b.severidade),
+      );
 
-    const alertasOrdenados = [...alertasFiltrados].sort(
-      (a, b) => ORDEM_SEVERIDADE.indexOf(a.severidade) - ORDEM_SEVERIDADE.indexOf(b.severidade),
-    );
+      const lista = secaoAlertas.createEl('ul');
+      for (const alerta of alertasOrdenados.slice(0, LIMITE_ALERTAS_EXIBIDOS)) {
+        const item = lista.createEl('li', { cls: `contrarius-alerta-${alerta.severidade}` });
+        const campo = alerta.campo ? ` [${alerta.campo}]` : '';
+        const link = item.createEl('code', { text: alerta.path, cls: 'contrarius-dashboard-caminho' });
+        link.addEventListener('click', () => void this.abrirNota(alerta.path));
+        item.createSpan({ text: `${campo}: ${alerta.mensagem}` });
+      }
 
-    const lista = secaoAlertas.createEl('ul');
-    for (const alerta of alertasOrdenados.slice(0, LIMITE_ALERTAS_EXIBIDOS)) {
-      const item = lista.createEl('li', { cls: `contrarius-alerta-${alerta.severidade}` });
-      const campo = alerta.campo ? ` [${alerta.campo}]` : '';
-      const link = item.createEl('code', { text: alerta.path, cls: 'contrarius-dashboard-caminho' });
-      link.addEventListener('click', () => void this.abrirNota(alerta.path));
-      item.createSpan({ text: `${campo}: ${alerta.mensagem}` });
-    }
-
-    if (alertasFiltrados.length > LIMITE_ALERTAS_EXIBIDOS) {
-      secaoAlertas.createEl('p', {
-        text: `... e mais ${alertasFiltrados.length - LIMITE_ALERTAS_EXIBIDOS} alerta(s). Use "Copiar relatório" para ver a lista completa.`,
-      });
+      if (alertasFiltrados.length > LIMITE_ALERTAS_EXIBIDOS) {
+        secaoAlertas.createEl('p', {
+          text: `... e mais ${alertasFiltrados.length - LIMITE_ALERTAS_EXIBIDOS} alerta(s). Use "Copiar relatório" para ver a lista completa.`,
+        });
+      }
     }
 
     this.renderizarVisoes(container, indice);
