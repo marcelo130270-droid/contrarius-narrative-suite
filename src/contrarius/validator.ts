@@ -16,8 +16,8 @@ function detectarIdsDuplicados(indice: IndiceContrarius): AlertaContrarius[] {
   };
 
   for (const consciencia of indice.consciencias) registrar(consciencia.id, consciencia.path);
-  for (const evento of indice.eventos) registrar(evento.codigo, evento.path);
-  for (const lugar of indice.lugares) registrar(lugar.codigo, lugar.path);
+  for (const evento of indice.eventos) registrar(evento.num_reg, evento.path);
+  for (const lugar of indice.lugares) registrar(lugar.num_reg, lugar.path);
 
   const alertas: AlertaContrarius[] = [];
   for (const [id, paths] of ocorrencias) {

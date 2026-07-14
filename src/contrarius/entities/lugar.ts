@@ -2,9 +2,8 @@ import type { AlertaContrarius, Lugar, NotaContrariusBruta, ResultadoNormalizaca
 import { extrairMetadata, getStr, getStrArray } from './campos';
 
 const CAMPOS_CONHECIDOS = [
-  'codigo',
+  'num_reg',
   'nome_atual',
-  'nomes_variantes',
   'coordenadas_google_earth',
   'nucleo_geo',
   'livros',
@@ -14,9 +13,9 @@ export function normalizarLugar(nota: NotaContrariusBruta): ResultadoNormalizaca
   const fm = nota.frontmatter;
   const alertas: AlertaContrarius[] = [];
 
-  const codigo = getStr(fm, 'codigo');
-  if (!codigo) {
-    alertas.push({ severidade: 'erro', path: nota.path, campo: 'codigo', mensagem: 'Lugar sem codigo.' });
+  const num_reg = getStr(fm, 'num_reg');
+  if (!num_reg) {
+    alertas.push({ severidade: 'erro', path: nota.path, campo: 'num_reg', mensagem: 'Lugar sem num_reg.' });
   }
 
   if (!getStr(fm, 'nome_atual')) {
@@ -25,9 +24,8 @@ export function normalizarLugar(nota: NotaContrariusBruta): ResultadoNormalizaca
 
   const entidade: Lugar = {
     path: nota.path,
-    codigo,
+    num_reg,
     nome_atual: getStr(fm, 'nome_atual'),
-    nomes_historicos: getStrArray(fm, 'nomes_variantes'),
     coordenadas: getStr(fm, 'coordenadas_google_earth'),
     nucleo_geo: getStrArray(fm, 'nucleo_geo'),
     livros: getStrArray(fm, 'livros'),

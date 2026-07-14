@@ -34,11 +34,11 @@ describe('validarIndiceContrarius', () => {
       '02_Consciencias/C-001.md': { id: 'C-001' },
       '03_Retrovidas/C-001_V01_Rogier.md': { consciencia: 'C-001', livro: 'Livro 1', periodo: ['Sec I'] },
       '05_Eventos/E-001.md': {
-        codigo: 'E-001',
+        num_reg: 'E-001',
         local: ['[[L-001_Acra]]'],
         retrovidas: ['[[C-001_V01_Rogier]]'],
       },
-      '06_Lugares/L-001_Acra.md': { codigo: 'L-001', nome_atual: 'Acre' },
+      '06_Lugares/L-001_Acra.md': { num_reg: 'L-001', nome_atual: 'Acre' },
     });
 
     const indice = await indexarVaultContrarius(vault, cache);
@@ -60,7 +60,7 @@ describe('validarIndiceContrarius', () => {
 
   it('detecta retrovida referenciada por evento mas inexistente', async () => {
     const { vault, cache } = makeVaultECache({
-      '05_Eventos/E-001.md': { codigo: 'E-001', retrovidas: ['[[C-999_V01_Inexistente]]'] },
+      '05_Eventos/E-001.md': { num_reg: 'E-001', retrovidas: ['[[C-999_V01_Inexistente]]'] },
     });
 
     const indice = await indexarVaultContrarius(vault, cache);
@@ -71,7 +71,7 @@ describe('validarIndiceContrarius', () => {
 
   it('detecta lugar referenciado (padrão L-###) mas ausente', async () => {
     const { vault, cache } = makeVaultECache({
-      '05_Eventos/E-001.md': { codigo: 'E-001', local: ['[[L-999_Inexistente]]'] },
+      '05_Eventos/E-001.md': { num_reg: 'E-001', local: ['[[L-999_Inexistente]]'] },
     });
 
     const indice = await indexarVaultContrarius(vault, cache);
@@ -82,7 +82,7 @@ describe('validarIndiceContrarius', () => {
 
   it('não alerta local em texto livre que não segue o padrão L-###', async () => {
     const { vault, cache } = makeVaultECache({
-      '05_Eventos/E-001.md': { codigo: 'E-001', local: ['Alguma cidade antiga'] },
+      '05_Eventos/E-001.md': { num_reg: 'E-001', local: ['Alguma cidade antiga'] },
     });
 
     const indice = await indexarVaultContrarius(vault, cache);

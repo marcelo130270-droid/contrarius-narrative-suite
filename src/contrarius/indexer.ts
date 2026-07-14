@@ -81,8 +81,8 @@ export async function indexarVaultContrarius<TArquivo extends ArquivoMarkdownCon
 
   const porId = new Map<string, Consciencia | Evento | Lugar>();
   for (const consciencia of consciencias) if (consciencia.id) porId.set(consciencia.id, consciencia);
-  for (const evento of eventos) if (evento.codigo) porId.set(evento.codigo, evento);
-  for (const lugar of lugares) if (lugar.codigo) porId.set(lugar.codigo, lugar);
+  for (const evento of eventos) if (evento.num_reg) porId.set(evento.num_reg, evento);
+  for (const lugar of lugares) if (lugar.num_reg) porId.set(lugar.num_reg, lugar);
 
   return { consciencias, retrovidas, eventos, lugares, relacoes, alertas, porId };
 }

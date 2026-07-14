@@ -99,16 +99,16 @@ describe('normalizarRetrovida', () => {
 });
 
 describe('normalizarEvento', () => {
-  it('gera erro quando falta codigo e aviso quando falta retrovidas', () => {
-    const { alertas } = normalizarEvento(nota('05_Eventos/sem-codigo.md', {}));
-    expect(alertas).toContainEqual(expect.objectContaining({ severidade: 'erro', campo: 'codigo' }));
+  it('gera erro quando falta num_reg e aviso quando falta retrovidas', () => {
+    const { alertas } = normalizarEvento(nota('05_Eventos/sem-num_reg.md', {}));
+    expect(alertas).toContainEqual(expect.objectContaining({ severidade: 'erro', campo: 'num_reg' }));
     expect(alertas).toContainEqual(expect.objectContaining({ severidade: 'aviso', campo: 'retrovidas' }));
   });
 
   it('resolve wikilinks em local/retrovidas/eventos_anteriores para o basename da nota', () => {
     const { entidade } = normalizarEvento(
       nota('05_Eventos/E-001 Início da retrocognição em Acra.md', {
-        codigo: 'E-001',
+        num_reg: 'E-001',
         local: ['[[L-001_Acra]]'],
         retrovidas: ['[[C-001_V01_Rogier_Del_Vignal]]', '[[C-002_V01_Gastoun_de_Chastel_Double]]'],
         eventos_posteriores: ['[[E-002 Abordagem violenta de Gastoun]]'],
@@ -122,7 +122,7 @@ describe('normalizarEvento', () => {
   it('captura ano_ordem/data_textual como string e tolera data_inicio/data_fim vindo como Date (YAML sem aspas)', () => {
     const { entidade } = normalizarEvento(
       nota('05_Eventos/E-001.md', {
-        codigo: 'E-001',
+        num_reg: 'E-001',
         ano_ordem: '2027',
         data_inicio: new Date('1229-09-10T00:00:00.000Z'),
         data_fim: new Date('1229-09-10T00:00:00.000Z'),
@@ -137,24 +137,24 @@ describe('normalizarEvento', () => {
 });
 
 describe('normalizarLugar', () => {
-  it('gera erro quando falta codigo', () => {
-    const { alertas } = normalizarLugar(nota('06_Lugares/sem-codigo.md', { nome_atual: 'Roma' }));
-    expect(alertas).toContainEqual(expect.objectContaining({ severidade: 'erro', campo: 'codigo' }));
+  it('gera erro quando falta num_reg', () => {
+    const { alertas } = normalizarLugar(nota('06_Lugares/sem-num_reg.md', { nome_atual: 'Roma' }));
+    expect(alertas).toContainEqual(expect.objectContaining({ severidade: 'erro', campo: 'num_reg' }));
   });
 
-  it('lê nomes_historicos a partir de nomes_variantes e coordenadas a partir de coordenadas_google_earth', () => {
+  it('lê coordenadas a partir de coordenadas_google_earth; nomes_variantes cai em metadata (mesclado em aliases no Vault)', () => {
     const { entidade } = normalizarLugar(
       nota('06_Lugares/L-001_Acra.md', {
-        codigo: 'L-001',
+        num_reg: 'L-001',
         nome_atual: 'Acre',
-        nomes_variantes: ['Accra'],
+        aliases: ['Acra', 'Accra'],
         coordenadas_google_earth: '32.9275, 35.0818',
         nucleo_geo: ['Levante'],
       }),
     );
-    expect(entidade.nomes_historicos).toEqual(['Accra']);
     expect(entidade.coordenadas).toBe('32.9275, 35.0818');
     expect(entidade.nucleo_geo).toEqual(['Levante']);
+    expect(entidade.metadata.aliases).toEqual(['Acra', 'Accra']);
   });
 });
 

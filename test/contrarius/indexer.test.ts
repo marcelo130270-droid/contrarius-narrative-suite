@@ -33,8 +33,8 @@ describe('indexarVaultContrarius', () => {
       '02_Consciencias/C-001.md': { id: 'C-001' },
       '02_Consciencias/sem-id.md': { historicidade: 'Real' },
       '03_Retrovidas/R-001.md': { consciencia: 'C-001', livro: 'Livro 1', periodo: ['Sec I'] },
-      '05_Eventos/E-001.md': { codigo: 'E-001', livro: 'Livro 1', periodo: ['Sec I'], retrovidas: ['C-001'] },
-      '06_Lugares/L-001.md': { codigo: 'L-001', nome_atual: 'Roma' },
+      '05_Eventos/E-001.md': { num_reg: 'E-001', livro: 'Livro 1', periodo: ['Sec I'], retrovidas: ['C-001'] },
+      '06_Lugares/L-001.md': { num_reg: 'L-001', nome_atual: 'Roma' },
       '04_Relacoes/rel-1.md': { a: 'C-001', b: 'C-002', tipo_relacao: 'aliado' },
     });
 
@@ -49,11 +49,11 @@ describe('indexarVaultContrarius', () => {
     expect(indice.alertas.some((a) => a.campo === 'id' && a.path === '02_Consciencias/sem-id.md')).toBe(true);
   });
 
-  it('constrói porId a partir de id/codigo (evento e lugar)', async () => {
+  it('constrói porId a partir de id/num_reg (evento e lugar)', async () => {
     const { vault, cache } = makeVaultECache({
       '02_Consciencias/C-001.md': { id: 'C-001' },
-      '05_Eventos/E-001.md': { codigo: 'E-001', retrovidas: ['C-001'] },
-      '06_Lugares/L-001.md': { codigo: 'L-001', nome_atual: 'Roma' },
+      '05_Eventos/E-001.md': { num_reg: 'E-001', retrovidas: ['C-001'] },
+      '06_Lugares/L-001.md': { num_reg: 'L-001', nome_atual: 'Roma' },
     });
 
     const indice = await indexarVaultContrarius(vault, cache);

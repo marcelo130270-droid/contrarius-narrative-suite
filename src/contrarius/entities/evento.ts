@@ -2,7 +2,7 @@ import type { AlertaContrarius, Evento, NotaContrariusBruta, ResultadoNormalizac
 import { extrairMetadata, getStr, getStrArray, getStrData, getStrOuNumero, getWikiLinkArray } from './campos';
 
 const CAMPOS_CONHECIDOS = [
-  'codigo',
+  'num_reg',
   'titulo',
   'local',
   'periodo',
@@ -24,9 +24,9 @@ export function normalizarEvento(nota: NotaContrariusBruta): ResultadoNormalizac
   const fm = nota.frontmatter;
   const alertas: AlertaContrarius[] = [];
 
-  const codigo = getStr(fm, 'codigo');
-  if (!codigo) {
-    alertas.push({ severidade: 'erro', path: nota.path, campo: 'codigo', mensagem: 'Evento sem codigo.' });
+  const num_reg = getStr(fm, 'num_reg');
+  if (!num_reg) {
+    alertas.push({ severidade: 'erro', path: nota.path, campo: 'num_reg', mensagem: 'Evento sem num_reg.' });
   }
 
   const retrovidas = getWikiLinkArray(fm, 'retrovidas');
@@ -36,7 +36,7 @@ export function normalizarEvento(nota: NotaContrariusBruta): ResultadoNormalizac
 
   const entidade: Evento = {
     path: nota.path,
-    codigo,
+    num_reg,
     titulo: getStr(fm, 'titulo'),
     local: getWikiLinkArray(fm, 'local'),
     periodo: getStrArray(fm, 'periodo'),

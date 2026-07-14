@@ -29,7 +29,7 @@ function rotuloEntidade(item: EntidadeAgrupavel): string {
 type ModoTimeline = 'cronologica' | 'narrativa';
 
 function rotuloEvento(evento: Evento): string {
-  return evento.titulo || evento.codigo || rotuloEntidade(evento);
+  return evento.titulo || evento.num_reg || rotuloEntidade(evento);
 }
 
 const ROTULO_COLECAO: Record<TipoColecaoContrarius, string> = {

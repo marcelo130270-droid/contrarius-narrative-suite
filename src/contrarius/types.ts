@@ -53,7 +53,7 @@ export interface Retrovida {
 
 export interface Evento {
   path: string;
-  codigo?: string;
+  num_reg?: string;
   titulo?: string;
   local?: string[];
   periodo?: string[];
@@ -75,9 +75,11 @@ export interface Evento {
 
 export interface Lugar {
   path: string;
-  codigo?: string;
+  num_reg?: string;
   nome_atual?: string;
-  nomes_historicos?: string[];
+  // Nomes alternativos/históricos vivem em `aliases` (migrado de `nomes_variantes`, que era subconjunto
+  // redundante). Nomes históricos POR PERÍODO continuam soltos numa tabela no corpo da nota — decisão de
+  // não estruturar isso ainda (ver CLAUDE.md).
   coordenadas?: string;
   nucleo_geo?: string[];
   livros?: string[];

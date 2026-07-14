@@ -47,8 +47,8 @@ describe('CAMPOS_AGRUPAVEIS', () => {
   it('agrupa por livro, período e núcleo geográfico (retrovida + evento + lugar)', async () => {
     const { vault, cache } = makeVaultECache({
       '03_Retrovidas/R-001.md': { consciencia: 'C-001', livro: 'Livro 1', periodo: ['Sec I'], nucleo_geo: ['Roma'] },
-      '05_Eventos/E-001.md': { codigo: 'E-001', livro: 'Livro 1', periodo: ['Sec II'], retrovidas: ['C-001'] },
-      '06_Lugares/L-001.md': { codigo: 'L-001', nome_atual: 'Roma', nucleo_geo: ['Mediterrâneo'] },
+      '05_Eventos/E-001.md': { num_reg: 'E-001', livro: 'Livro 1', periodo: ['Sec II'], retrovidas: ['C-001'] },
+      '06_Lugares/L-001.md': { num_reg: 'L-001', nome_atual: 'Roma', nucleo_geo: ['Mediterrâneo'] },
     });
     const indice = await indexarVaultContrarius(vault, cache);
 
