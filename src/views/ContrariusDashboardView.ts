@@ -1,4 +1,4 @@
-import { ItemView, Notice, TFile, WorkspaceLeaf } from 'obsidian';
+import { ItemView, Notice, TFile, TFolder, WorkspaceLeaf } from 'obsidian';
 import StorytellerSuitePlugin from '../main';
 import { indexarVaultContrarius, type IndiceContrarius } from '../contrarius/indexer';
 import { validarIndiceContrarius } from '../contrarius/validator';
@@ -6,6 +6,7 @@ import { classificarColecaoContrariusPorCaminho } from '../contrarius/reader';
 import { CAMPOS_AGRUPAVEIS, type EntidadeAgrupavel } from '../contrarius/agrupamento';
 import { gerarScrivenerImportMarkdown } from '../contrarius/scrivener-export-minimo';
 import { construirPlanoPacoteScrivener, nomePastaPacote } from '../contrarius/scrivener-package-plano';
+import { verificarPacoteScrivener, type ArquivoLidoPacote, type RelatorioVerificacaoPacote } from '../contrarius/scrivener-package-verificacao';
 import type {
   AlertaContrarius,
   Evento,
@@ -71,6 +72,7 @@ export class ContrariusDashboardView extends ItemView {
   private filtroColecoes: Set<TipoColecaoContrarius> = new Set(COLECOES_FILTRAVEIS);
   private dimensaoVisao: string = CAMPOS_AGRUPAVEIS[0].chave;
   private modoTimeline: ModoTimeline = 'cronologica';
+  private ultimaVerificacao: { pasta: string; relatorio: RelatorioVerificacaoPacote } | null = null;
 
   constructor(leaf: WorkspaceLeaf, plugin: StorytellerSuitePlugin) {
     super(leaf);
@@ -182,6 +184,68 @@ export class ContrariusDashboardView extends ItemView {
     }
   }
 
+  // Etapa 13: Verify redesenhado. Regra que quebrou antes: nunca depender de estado em memória de
+  // modal. Aqui não há modal nenhum — cada clique relê tudo do disco, do zero, mesmo que tenha
+  // acabado de exportar na mesma sessão.
+  private encontrarPastaPacoteMaisRecente(): string | null {
+    const raiz = this.app.vault.getAbstractFileByPath('scrivener-package');
+    if (!(raiz instanceof TFolder)) return null;
+    const pastas = raiz.children.filter((f): f is TFolder => f instanceof TFolder).map((f) => f.path);
+    if (pastas.length === 0) return null;
+    return [...pastas].sort().at(-1)!;
+  }
+
+  private async lerArquivosPacote(pasta: string): Promise<ArquivoLidoPacote[]> {
+    const caminhos = ['manifest.json', 'scrivener-import.md', 'README.md', 'integrity/report.json'];
+    const resultado: ArquivoLidoPacote[] = [];
+    for (const caminhoRelativo of caminhos) {
+      const arquivo = this.app.vault.getAbstractFileByPath(`${pasta}/${caminhoRelativo}`);
+      const conteudo = arquivo instanceof TFile ? await this.app.vault.read(arquivo) : null;
+      resultado.push({ caminhoRelativo, conteudo });
+    }
+    return resultado;
+  }
+
+  private async verificarUltimoPacote(): Promise<void> {
+    const pasta = this.encontrarPastaPacoteMaisRecente();
+    if (!pasta) {
+      this.ultimaVerificacao = {
+        pasta: '(nenhuma)',
+        relatorio: {
+          pacoteEncontrado: false,
+          manifestoValido: false,
+          itens: [],
+          resumo: 'Nenhuma pasta scrivener-package/ encontrada no Vault. Exporte um pacote primeiro.',
+        },
+      };
+      this.renderizar();
+      return;
+    }
+    const arquivos = await this.lerArquivosPacote(pasta);
+    const relatorio = verificarPacoteScrivener(arquivos);
+    this.ultimaVerificacao = { pasta, relatorio };
+    this.renderizar();
+  }
+
+  private renderizarVerificacao(container: HTMLElement): void {
+    if (!this.ultimaVerificacao) return;
+    const { pasta, relatorio } = this.ultimaVerificacao;
+
+    const secao = container.createDiv({ cls: 'contrarius-dashboard-verificacao' });
+    secao.createEl('h3', { text: 'Verificação do pacote Scrivener' });
+    secao.createEl('p', { text: `Pasta: ${pasta}` });
+    secao.createEl('p', { text: relatorio.resumo });
+
+    if (relatorio.itens.length === 0) return;
+
+    const lista = secao.createEl('ul');
+    for (const item of relatorio.itens) {
+      const li = lista.createEl('li', { cls: `contrarius-verificacao-${item.status}` });
+      li.createEl('code', { text: item.caminhoRelativo });
+      li.createSpan({ text: ` — ${item.status}${item.detalhe ? `: ${item.detalhe}` : ''}` });
+    }
+  }
+
   private renderizar(): void {
     const indice = this.indice;
     if (!indice) return;
@@ -211,6 +275,9 @@ export class ContrariusDashboardView extends ItemView {
 
     const botaoExportarPacote = botoes.createEl('button', { text: 'Exportar pacote Scrivener' });
     botaoExportarPacote.addEventListener('click', () => void this.exportarPacoteScrivener(indice));
+
+    const botaoVerificar = botoes.createEl('button', { text: 'Verificar último pacote' });
+    botaoVerificar.addEventListener('click', () => void this.verificarUltimoPacote());
 
     const resumo = container.createDiv({ cls: 'contrarius-dashboard-resumo' });
     const totais: Array<[string, number]> = [
@@ -291,6 +358,7 @@ export class ContrariusDashboardView extends ItemView {
 
     this.renderizarVisoes(container, indice);
     this.renderizarTimeline(container, indice);
+    this.renderizarVerificacao(container);
   }
 
   private renderizarVisoes(container: HTMLElement, indice: IndiceContrarius): void {
