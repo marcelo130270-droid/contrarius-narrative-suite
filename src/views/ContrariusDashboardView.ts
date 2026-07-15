@@ -382,6 +382,13 @@ export class ContrariusDashboardView extends ItemView {
       item.createEl('span', { text: rotulo });
     }
 
+    this.renderizarVisoes(container, indice);
+    this.renderizarTimeline(container, indice);
+    this.renderizarAlertas(container);
+    this.renderizarVerificacao(container);
+  }
+
+  private renderizarAlertas(container: HTMLElement): void {
     const secaoAlertas = container.createDiv({ cls: 'contrarius-dashboard-alertas' });
     secaoAlertas.createEl('h3', { text: 'Alertas' });
 
@@ -423,30 +430,27 @@ export class ContrariusDashboardView extends ItemView {
 
     if (alertasFiltrados.length === 0) {
       secaoAlertas.createEl('p', { text: 'Nenhum alerta com os filtros atuais.' });
-    } else {
-      const alertasOrdenados = [...alertasFiltrados].sort(
-        (a, b) => ORDEM_SEVERIDADE.indexOf(a.severidade) - ORDEM_SEVERIDADE.indexOf(b.severidade),
-      );
-
-      const lista = secaoAlertas.createEl('ul');
-      for (const alerta of alertasOrdenados.slice(0, LIMITE_ALERTAS_EXIBIDOS)) {
-        const item = lista.createEl('li', { cls: `contrarius-alerta-${alerta.severidade}` });
-        const campo = alerta.campo ? ` [${alerta.campo}]` : '';
-        const link = item.createEl('code', { text: alerta.path, cls: 'contrarius-dashboard-caminho' });
-        link.addEventListener('click', () => void this.abrirNota(alerta.path));
-        item.createSpan({ text: `${campo}: ${alerta.mensagem}` });
-      }
-
-      if (alertasFiltrados.length > LIMITE_ALERTAS_EXIBIDOS) {
-        secaoAlertas.createEl('p', {
-          text: `... e mais ${alertasFiltrados.length - LIMITE_ALERTAS_EXIBIDOS} alerta(s). Use "Copiar relatório" para ver a lista completa.`,
-        });
-      }
+      return;
     }
 
-    this.renderizarVisoes(container, indice);
-    this.renderizarTimeline(container, indice);
-    this.renderizarVerificacao(container);
+    const alertasOrdenados = [...alertasFiltrados].sort(
+      (a, b) => ORDEM_SEVERIDADE.indexOf(a.severidade) - ORDEM_SEVERIDADE.indexOf(b.severidade),
+    );
+
+    const lista = secaoAlertas.createEl('ul');
+    for (const alerta of alertasOrdenados.slice(0, LIMITE_ALERTAS_EXIBIDOS)) {
+      const item = lista.createEl('li', { cls: `contrarius-alerta-${alerta.severidade}` });
+      const campo = alerta.campo ? ` [${alerta.campo}]` : '';
+      const link = item.createEl('code', { text: alerta.path, cls: 'contrarius-dashboard-caminho' });
+      link.addEventListener('click', () => void this.abrirNota(alerta.path));
+      item.createSpan({ text: `${campo}: ${alerta.mensagem}` });
+    }
+
+    if (alertasFiltrados.length > LIMITE_ALERTAS_EXIBIDOS) {
+      secaoAlertas.createEl('p', {
+        text: `... e mais ${alertasFiltrados.length - LIMITE_ALERTAS_EXIBIDOS} alerta(s). Use "Copiar relatório" para ver a lista completa.`,
+      });
+    }
   }
 
   private renderizarVisoes(container: HTMLElement, indice: IndiceContrarius): void {
