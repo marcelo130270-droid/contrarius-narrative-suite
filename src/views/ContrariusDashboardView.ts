@@ -19,7 +19,7 @@ import {
   gerarTimelineCronologica,
   gerarTimelineNarrativa,
 } from '../contrarius/scrivener-export-estruturado';
-import { calcularRenumeracaoOrdemNarrativa, ordenarEventosParaTimeline, rotuloEvento } from '../contrarius/timeline';
+import { calcularRenumeracaoOrdem, ordenarEventosParaTimeline, rotuloEvento, type ModoOrdenacaoTimeline } from '../contrarius/timeline';
 import type {
   AlertaContrarius,
   SeveridadeAlertaContrarius,
@@ -32,8 +32,6 @@ const ORDEM_SEVERIDADE: SeveridadeAlertaContrarius[] = ['erro', 'aviso', 'info']
 const TODAS_SEVERIDADES: SeveridadeAlertaContrarius[] = ['erro', 'aviso', 'info'];
 const COLECOES_FILTRAVEIS: TipoColecaoContrarius[] = ['consciencias', 'retrovidas', 'eventos', 'lugares', 'relacoes'];
 const LIMITE_ALERTAS_EXIBIDOS = 50;
-
-type ModoTimeline = 'cronologica' | 'narrativa';
 
 const ROTULO_COLECAO: Record<TipoColecaoContrarius, string> = {
   consciencias: 'Consciências',
@@ -71,7 +69,7 @@ export class ContrariusDashboardView extends ItemView {
   private filtroSeveridades: Set<SeveridadeAlertaContrarius> = new Set(TODAS_SEVERIDADES);
   private filtroColecoes: Set<TipoColecaoContrarius> = new Set(COLECOES_FILTRAVEIS);
   private dimensaoVisao: string = CAMPOS_AGRUPAVEIS[0].chave;
-  private modoTimeline: ModoTimeline = 'cronologica';
+  private modoTimeline: ModoOrdenacaoTimeline = 'cronologica';
   private ultimaVerificacao: { pasta: string; relatorio: RelatorioVerificacaoPacote } | null = null;
 
   constructor(leaf: WorkspaceLeaf, plugin: StorytellerSuitePlugin) {
@@ -219,27 +217,30 @@ export class ContrariusDashboardView extends ItemView {
     }
   }
 
-  // Renumera ordem_narrativa (posição narrativa) pra sequência limpa 1,2,3..., respeitando a ordem atual —
-  // nunca mexe em num_reg/título/nome do arquivo. Eventos sem ordem_narrativa ficam de fora (posição não
-  // decidida ainda). Usa fileManager.processFrontMatter (API do Obsidian), não edição manual de texto.
-  private async renumerarOrdemNarrativa(indice: IndiceContrarius): Promise<void> {
+  // Renumera ordem_narrativa OU ordem_cronologica (mesmo botão/mecânica pros dois eixos) pra sequência
+  // limpa 1,2,3..., respeitando a ordem atual — nunca mexe em num_reg/título/nome do arquivo. Eventos sem
+  // o campo do modo escolhido ficam de fora (posição não decidida ainda). Usa fileManager.processFrontMatter
+  // (API do Obsidian), não edição manual de texto.
+  private async renumerarOrdem(indice: IndiceContrarius, modo: ModoOrdenacaoTimeline): Promise<void> {
+    const rotuloModo = modo === 'cronologica' ? 'Ordem cronológica' : 'Ordem narrativa';
     try {
-      const renumeracao = calcularRenumeracaoOrdemNarrativa(indice.eventos);
+      const { campoUsado } = ordenarEventosParaTimeline(indice.eventos, modo);
+      const renumeracao = calcularRenumeracaoOrdem(indice.eventos, modo);
       if (renumeracao.length === 0) {
-        new Notice('Nenhum evento com ordem_narrativa preenchido — nada para renumerar.');
+        new Notice(`Nenhum evento com ${campoUsado} preenchido — nada para renumerar.`);
         return;
       }
       let alterados = 0;
       for (const item of renumeracao) {
-        if (item.ordemNarrativaAntiga === item.ordemNarrativaNova) continue;
+        if (item.valorAntigo === item.valorNovo) continue;
         const arquivo = this.app.vault.getAbstractFileByPath(item.path);
         if (!(arquivo instanceof TFile)) continue;
         await this.app.fileManager.processFrontMatter(arquivo, (fm) => {
-          fm.ordem_narrativa = item.ordemNarrativaNova;
+          fm[campoUsado] = item.valorNovo;
         });
         alterados++;
       }
-      new Notice(`Ordem narrativa renumerada: ${alterados} evento(s) alterado(s) de ${renumeracao.length} no total.`);
+      new Notice(`${rotuloModo} renumerada: ${alterados} evento(s) alterado(s) de ${renumeracao.length} no total.`);
       await this.reindexarERenderizar();
     } catch (erro) {
       new Notice(`Falha ao renumerar: ${erro instanceof Error ? erro.message : String(erro)}`);
@@ -390,8 +391,11 @@ export class ContrariusDashboardView extends ItemView {
     const botaoIndicesCampo = botoes.createEl('button', { text: 'Atualizar índices por livro/período' });
     botaoIndicesCampo.addEventListener('click', () => void this.atualizarIndicesPorCampo(indice));
 
-    const botaoRenumerar = botoes.createEl('button', { text: 'Renumerar ordem narrativa' });
-    botaoRenumerar.addEventListener('click', () => void this.renumerarOrdemNarrativa(indice));
+    const botaoRenumerarNarrativa = botoes.createEl('button', { text: 'Renumerar ordem narrativa' });
+    botaoRenumerarNarrativa.addEventListener('click', () => void this.renumerarOrdem(indice, 'narrativa'));
+
+    const botaoRenumerarCronologica = botoes.createEl('button', { text: 'Renumerar ordem cronológica' });
+    botaoRenumerarCronologica.addEventListener('click', () => void this.renumerarOrdem(indice, 'cronologica'));
 
     const resumo = container.createDiv({ cls: 'contrarius-dashboard-resumo' });
     const totais: Array<[string, number]> = [
@@ -520,27 +524,32 @@ export class ContrariusDashboardView extends ItemView {
     secao.createEl('h3', { text: 'Timeline' });
 
     const seletor = secao.createEl('select');
-    const opcaoCronologica = seletor.createEl('option', { text: 'Ordem cronológica (data_inicio)', value: 'cronologica' });
+    const opcaoCronologica = seletor.createEl('option', { text: 'Ordem cronológica (ordem_cronologica)', value: 'cronologica' });
     const opcaoNarrativa = seletor.createEl('option', { text: 'Ordem narrativa (ordem_narrativa)', value: 'narrativa' });
     (this.modoTimeline === 'cronologica' ? opcaoCronologica : opcaoNarrativa).selected = true;
     seletor.addEventListener('change', () => {
-      this.modoTimeline = seletor.value as ModoTimeline;
+      this.modoTimeline = seletor.value as ModoOrdenacaoTimeline;
       this.renderizar();
     });
 
     const { comData, semData, campoUsado: chaveOrdenacao } = ordenarEventosParaTimeline(indice.eventos, this.modoTimeline);
+    // No modo cronológico, data_inicio/data_textual são só informativos (não usados pra ordenar) —
+    // mostrados numa coluna à parte pra dar contexto, ver CLAUDE.md, decisão de 2026-08-03.
+    const mostrarColunaData = this.modoTimeline === 'cronologica';
 
     if (comData.length === 0) {
       secao.createEl('p', { text: 'Nenhum evento com dados suficientes para esta ordem.' });
     } else {
       const tabela = secao.createEl('table', { cls: 'contrarius-dashboard-timeline-tabela' });
       const cabecalho = tabela.createEl('tr');
-      cabecalho.createEl('th', { text: this.modoTimeline === 'cronologica' ? 'Data' : 'Ordem' });
+      cabecalho.createEl('th', { text: 'Ordem' });
+      if (mostrarColunaData) cabecalho.createEl('th', { text: 'Data' });
       cabecalho.createEl('th', { text: 'Evento' });
       cabecalho.createEl('th', { text: 'Livro' });
       for (const evento of comData) {
         const linha = tabela.createEl('tr');
         linha.createEl('td', { text: (evento[chaveOrdenacao] as string) ?? '' });
+        if (mostrarColunaData) linha.createEl('td', { text: evento.data_textual ?? evento.data_inicio ?? '' });
         const celulaEvento = linha.createEl('td');
         const link = celulaEvento.createEl('code', { text: rotuloEvento(evento), cls: 'contrarius-dashboard-caminho' });
         link.addEventListener('click', () => void this.abrirNota(evento.path));

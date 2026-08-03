@@ -69,10 +69,18 @@ export interface Evento {
   // de calendário (nem o ano histórico do evento, nem o ano de uma eventual cena de "moldura" no
   // presente — ver CLAUDE.md, decisão de 2026-07-14). `num_reg`/título/nome do arquivo ficam fixos ao
   // reordenar; só este campo muda. Usar o botão "Renumerar ordem narrativa" do Dashboard pra manter
-  // sequencial sem buracos depois de reordenar manualmente. Cronológica (data histórica) = `data_inicio`.
+  // sequencial sem buracos depois de reordenar manualmente. Cronológica (data histórica) = `ordem_cronologica`.
   // Renomeado de `ano_ordem` pra `ordem_narrativa` em 2026-08-03 — o nome antigo sugeria ano de
   // calendário, o que já tinha causado o bug de ordenação corrigido acima.
   ordem_narrativa?: string;
+  // Posição na ordem em que os eventos realmente aconteceram na história (mesmo princípio de
+  // `ordem_narrativa`: número de sequência puro, decidido por curadoria manual, com decimais tipo "2.1"
+  // pra encaixar um evento entre dois já numerados, sem precisar renumerar tudo). Existe porque
+  // `data_inicio`/`data_textual` sozinhos não davam conta de desempatar eventos do mesmo dia nem de
+  // posicionar eventos com data só de ano (ver CLAUDE.md, decisão de 2026-08-03). `data_inicio`/
+  // `data_fim`/`data_textual` continuam existindo, só que agora são puramente informativos — não
+  // usados pra ordenar.
+  ordem_cronologica?: string;
   data_inicio?: string;
   data_fim?: string;
   data_textual?: string;

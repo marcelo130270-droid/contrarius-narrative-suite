@@ -61,6 +61,7 @@ export function blocoEvento(e: Evento): string[] {
       linhaArray('retrovidas', e.retrovidas),
       linha('data_textual', e.data_textual),
       linha('data_inicio', e.data_inicio),
+      linha('ordem_cronologica', e.ordem_cronologica),
       linha('ordem_narrativa', e.ordem_narrativa),
       linha('Fonte', e.path),
     ].filter((l): l is string => l !== null),

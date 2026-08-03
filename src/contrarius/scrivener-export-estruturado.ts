@@ -61,16 +61,20 @@ export function gerarIndiceEstruturado(indice: IndiceContrarius, geradoEm: Date 
 
 function gerarTimeline(indice: IndiceContrarius, modo: ModoOrdenacaoTimeline, titulo: string, geradoEm: Date): string {
   const { comData, semData, campoUsado } = ordenarEventosParaTimeline(indice.eventos, modo);
+  // No modo cronológico, data_inicio/data_textual são só informativos (não usados pra ordenar) — ver
+  // CLAUDE.md, decisão de 2026-08-03. Entram numa coluna à parte, só nesse modo.
+  const mostrarColunaData = modo === 'cronologica';
   const linhas: string[] = [];
 
   linhas.push(`# ${titulo}`);
   linhas.push('');
   linhas.push(`Gerado em: ${geradoEm.toISOString()}`);
   linhas.push('');
-  linhas.push(`| ${campoUsado === 'data_inicio' ? 'Data' : 'Ordem'} | Evento | Livro |`);
-  linhas.push('| --- | --- | --- |');
+  linhas.push(`| Ordem${mostrarColunaData ? ' | Data' : ''} | Evento | Livro |`);
+  linhas.push(`| ---${mostrarColunaData ? ' | ---' : ''} | --- | --- |`);
   for (const e of comData) {
-    linhas.push(`| ${e[campoUsado] ?? ''} | [${rotuloEvento(e)}](${e.path}) | ${e.livro ?? ''} |`);
+    const colunaData = mostrarColunaData ? ` | ${e.data_textual ?? e.data_inicio ?? ''}` : '';
+    linhas.push(`| ${e[campoUsado] ?? ''}${colunaData} | [${rotuloEvento(e)}](${e.path}) | ${e.livro ?? ''} |`);
   }
   linhas.push('');
 
@@ -84,9 +88,10 @@ function gerarTimeline(indice: IndiceContrarius, modo: ModoOrdenacaoTimeline, ti
   return linhas.join('\n');
 }
 
-// Etapa 14, sub-fase 2: timeline exportável. `cronologia.md` = ordem histórica/no mundo (data_inicio);
-// `eventos.md` = ordem narrativa, a ordem em que o leitor encontra as cenas (ordem_narrativa). Reaproveita a
-// mesma ordenação já usada no Dashboard (src/contrarius/timeline.ts), sem duplicar a lógica.
+// Etapa 14, sub-fase 2: timeline exportável. `cronologia.md` = ordem histórica/no mundo (ordem_cronologica,
+// com data_inicio/data_textual só como coluna informativa); `eventos.md` = ordem narrativa, a ordem em que
+// o leitor encontra as cenas (ordem_narrativa). Reaproveita a mesma ordenação já usada no Dashboard
+// (src/contrarius/timeline.ts), sem duplicar a lógica.
 export function gerarTimelineCronologica(indice: IndiceContrarius, geradoEm: Date = new Date()): string {
   return gerarTimeline(indice, 'cronologica', 'Contrarius — Timeline cronológica', geradoEm);
 }

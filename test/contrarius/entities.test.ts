@@ -119,17 +119,19 @@ describe('normalizarEvento', () => {
     expect(entidade.eventos_posteriores).toEqual(['E-002 Abordagem violenta de Gastoun']);
   });
 
-  it('captura ordem_narrativa/data_textual como string e tolera data_inicio/data_fim vindo como Date (YAML sem aspas)', () => {
+  it('captura ordem_narrativa/ordem_cronologica/data_textual como string e tolera data_inicio/data_fim vindo como Date (YAML sem aspas)', () => {
     const { entidade } = normalizarEvento(
       nota('05_Eventos/E-001.md', {
         num_reg: 'E-001',
         ordem_narrativa: '2027',
+        ordem_cronologica: '15.5',
         data_inicio: new Date('1229-09-10T00:00:00.000Z'),
         data_fim: new Date('1229-09-10T00:00:00.000Z'),
         data_textual: 'Outono de 1229',
       }),
     );
     expect(entidade.ordem_narrativa).toBe('2027');
+    expect(entidade.ordem_cronologica).toBe('15.5');
     expect(entidade.data_inicio).toBe('1229-09-10');
     expect(entidade.data_fim).toBe('1229-09-10');
     expect(entidade.data_textual).toBe('Outono de 1229');

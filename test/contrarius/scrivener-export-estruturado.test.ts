@@ -54,12 +54,12 @@ describe('gerarIndiceEstruturado', () => {
 });
 
 describe('gerarTimelineCronologica', () => {
-  it('ordena eventos por data_inicio e separa os sem data numa seção à parte', () => {
+  it('ordena eventos por ordem_cronologica e separa os sem ordem numa seção à parte', () => {
     const indice = indiceVazio();
     indice.eventos.push(
-      { path: '05_Eventos/E-002.md', titulo: 'Depois', data_inicio: '1250-01-01', metadata: {} },
-      { path: '05_Eventos/E-001.md', titulo: 'Antes', data_inicio: '1200-01-01', metadata: {} },
-      { path: '05_Eventos/E-003.md', titulo: 'Sem data', metadata: {} },
+      { path: '05_Eventos/E-002.md', titulo: 'Depois', ordem_cronologica: '10', data_textual: 'Verão de 1250', metadata: {} },
+      { path: '05_Eventos/E-001.md', titulo: 'Antes', ordem_cronologica: '2', data_inicio: '1200-01-01', metadata: {} },
+      { path: '05_Eventos/E-003.md', titulo: 'Sem ordem', metadata: {} },
     );
 
     const md = gerarTimelineCronologica(indice, DATA_FIXA);
@@ -68,8 +68,11 @@ describe('gerarTimelineCronologica', () => {
     const posDepois = md.indexOf('Depois');
     expect(posAntes).toBeGreaterThan(0);
     expect(posAntes).toBeLessThan(posDepois);
-    expect(md).toContain('## Sem data_inicio');
-    expect(md).toContain('[Sem data](05_Eventos/E-003.md)');
+    expect(md).toContain('## Sem ordem_cronologica');
+    expect(md).toContain('[Sem ordem](05_Eventos/E-003.md)');
+    // data_inicio/data_textual continuam informativos, numa coluna à parte (não usados pra ordenar)
+    expect(md).toContain('1200-01-01');
+    expect(md).toContain('Verão de 1250');
   });
 
   it('não quebra com nenhum evento', () => {
