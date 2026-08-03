@@ -85,7 +85,7 @@ function gerarTimeline(indice: IndiceContrarius, modo: ModoOrdenacaoTimeline, ti
 }
 
 // Etapa 14, sub-fase 2: timeline exportável. `cronologia.md` = ordem histórica/no mundo (data_inicio);
-// `eventos.md` = ordem narrativa, a ordem em que o leitor encontra as cenas (ano_ordem). Reaproveita a
+// `eventos.md` = ordem narrativa, a ordem em que o leitor encontra as cenas (ordem_narrativa). Reaproveita a
 // mesma ordenação já usada no Dashboard (src/contrarius/timeline.ts), sem duplicar a lógica.
 export function gerarTimelineCronologica(indice: IndiceContrarius, geradoEm: Date = new Date()): string {
   return gerarTimeline(indice, 'cronologica', 'Contrarius — Timeline cronológica', geradoEm);

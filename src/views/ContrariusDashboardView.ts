@@ -219,23 +219,23 @@ export class ContrariusDashboardView extends ItemView {
     }
   }
 
-  // Renumera ano_ordem (posição narrativa) pra sequência limpa 1,2,3..., respeitando a ordem atual —
-  // nunca mexe em num_reg/título/nome do arquivo. Eventos sem ano_ordem ficam de fora (posição não
+  // Renumera ordem_narrativa (posição narrativa) pra sequência limpa 1,2,3..., respeitando a ordem atual —
+  // nunca mexe em num_reg/título/nome do arquivo. Eventos sem ordem_narrativa ficam de fora (posição não
   // decidida ainda). Usa fileManager.processFrontMatter (API do Obsidian), não edição manual de texto.
   private async renumerarOrdemNarrativa(indice: IndiceContrarius): Promise<void> {
     try {
       const renumeracao = calcularRenumeracaoOrdemNarrativa(indice.eventos);
       if (renumeracao.length === 0) {
-        new Notice('Nenhum evento com ano_ordem preenchido — nada para renumerar.');
+        new Notice('Nenhum evento com ordem_narrativa preenchido — nada para renumerar.');
         return;
       }
       let alterados = 0;
       for (const item of renumeracao) {
-        if (item.anoOrdemAntigo === item.anoOrdemNovo) continue;
+        if (item.ordemNarrativaAntiga === item.ordemNarrativaNova) continue;
         const arquivo = this.app.vault.getAbstractFileByPath(item.path);
         if (!(arquivo instanceof TFile)) continue;
         await this.app.fileManager.processFrontMatter(arquivo, (fm) => {
-          fm.ano_ordem = item.anoOrdemNovo;
+          fm.ordem_narrativa = item.ordemNarrativaNova;
         });
         alterados++;
       }
@@ -521,7 +521,7 @@ export class ContrariusDashboardView extends ItemView {
 
     const seletor = secao.createEl('select');
     const opcaoCronologica = seletor.createEl('option', { text: 'Ordem cronológica (data_inicio)', value: 'cronologica' });
-    const opcaoNarrativa = seletor.createEl('option', { text: 'Ordem narrativa (ano_ordem)', value: 'narrativa' });
+    const opcaoNarrativa = seletor.createEl('option', { text: 'Ordem narrativa (ordem_narrativa)', value: 'narrativa' });
     (this.modoTimeline === 'cronologica' ? opcaoCronologica : opcaoNarrativa).selected = true;
     seletor.addEventListener('change', () => {
       this.modoTimeline = seletor.value as ModoTimeline;

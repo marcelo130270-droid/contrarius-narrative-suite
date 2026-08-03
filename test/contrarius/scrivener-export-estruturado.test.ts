@@ -78,11 +78,11 @@ describe('gerarTimelineCronologica', () => {
 });
 
 describe('gerarTimelineNarrativa', () => {
-  it('ordena por ano_ordem numérico', () => {
+  it('ordena por ordem_narrativa numérico', () => {
     const indice = indiceVazio();
     indice.eventos.push(
-      { path: '05_Eventos/E-002.md', titulo: 'Depois', ano_ordem: '10', metadata: {} },
-      { path: '05_Eventos/E-001.md', titulo: 'Antes', ano_ordem: '2', metadata: {} },
+      { path: '05_Eventos/E-002.md', titulo: 'Depois', ordem_narrativa: '10', metadata: {} },
+      { path: '05_Eventos/E-001.md', titulo: 'Antes', ordem_narrativa: '2', metadata: {} },
     );
 
     const md = gerarTimelineNarrativa(indice, DATA_FIXA);

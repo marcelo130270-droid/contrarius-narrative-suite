@@ -70,7 +70,9 @@ export interface Evento {
   // presente — ver CLAUDE.md, decisão de 2026-07-14). `num_reg`/título/nome do arquivo ficam fixos ao
   // reordenar; só este campo muda. Usar o botão "Renumerar ordem narrativa" do Dashboard pra manter
   // sequencial sem buracos depois de reordenar manualmente. Cronológica (data histórica) = `data_inicio`.
-  ano_ordem?: string;
+  // Renomeado de `ano_ordem` pra `ordem_narrativa` em 2026-08-03 — o nome antigo sugeria ano de
+  // calendário, o que já tinha causado o bug de ordenação corrigido acima.
+  ordem_narrativa?: string;
   data_inicio?: string;
   data_fim?: string;
   data_textual?: string;
