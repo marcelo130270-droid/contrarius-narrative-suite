@@ -21,6 +21,14 @@ const CAMPOS_CONHECIDOS = [
   'data_textual',
 ] as const;
 
+// Nome do arquivo já carrega o título de exibição (convenção "E - Título.md", ver CLAUDE.md) — evita ter
+// que digitar o mesmo texto duas vezes (nome do arquivo + campo `titulo`). O campo `titulo` no frontmatter
+// continua funcionando como override, se um dia precisar de um título de exibição diferente do nome do
+// arquivo (que tem que manter o prefixo "E - " pra identificação visual na lista de arquivos).
+function tituloDoNomeArquivo(basename: string): string {
+  return basename.replace(/^E\s*-\s*/, '').trim();
+}
+
 export function normalizarEvento(nota: NotaContrariusBruta): ResultadoNormalizacao<Evento> {
   const fm = nota.frontmatter;
   const alertas: AlertaContrarius[] = [];
@@ -38,7 +46,7 @@ export function normalizarEvento(nota: NotaContrariusBruta): ResultadoNormalizac
   const entidade: Evento = {
     path: nota.path,
     num_reg,
-    titulo: getStr(fm, 'titulo'),
+    titulo: getStr(fm, 'titulo') ?? tituloDoNomeArquivo(nota.basename),
     local: getWikiLinkArray(fm, 'local'),
     periodo: getStrArray(fm, 'periodo'),
     nucleo_geo: getStrArray(fm, 'nucleo_geo'),

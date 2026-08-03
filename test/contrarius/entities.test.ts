@@ -119,6 +119,18 @@ describe('normalizarEvento', () => {
     expect(entidade.eventos_posteriores).toEqual(['E-002 Abordagem violenta de Gastoun']);
   });
 
+  it('deriva titulo do nome do arquivo (removendo o prefixo "E - ") quando o campo titulo está vazio', () => {
+    const { entidade } = normalizarEvento(nota('05_Eventos/E - Tomada de Cabaret.md', { num_reg: 'E-091' }));
+    expect(entidade.titulo).toBe('Tomada de Cabaret');
+  });
+
+  it('campo titulo no frontmatter tem prioridade sobre o nome do arquivo, quando preenchido', () => {
+    const { entidade } = normalizarEvento(
+      nota('05_Eventos/E - Tomada de Cabaret.md', { num_reg: 'E-091', titulo: 'Título alternativo' }),
+    );
+    expect(entidade.titulo).toBe('Título alternativo');
+  });
+
   it('captura ordem_narrativa/ordem_cronologica/data_textual como string e tolera data_inicio/data_fim vindo como Date (YAML sem aspas)', () => {
     const { entidade } = normalizarEvento(
       nota('05_Eventos/E-001.md', {
