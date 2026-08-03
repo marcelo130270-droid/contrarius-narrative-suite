@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ordenarEventosParaTimeline } from '../../src/contrarius/timeline';
+import { calcularRenumeracaoOrdemNarrativa, ordenarEventosParaTimeline } from '../../src/contrarius/timeline';
 import type { Evento } from '../../src/contrarius/types';
 
 function evento(parcial: Partial<Evento>): Evento {
@@ -40,5 +40,41 @@ describe('ordenarEventosParaTimeline', () => {
     const { comData, semData } = ordenarEventosParaTimeline([], 'cronologica');
     expect(comData).toEqual([]);
     expect(semData).toEqual([]);
+  });
+});
+
+describe('calcularRenumeracaoOrdemNarrativa', () => {
+  it('atribui sequência limpa (1, 2, 3...) respeitando a ordem narrativa atual, mesmo com números "feios"', () => {
+    const eventos = [
+      evento({ path: '05_Eventos/E-002.md', ano_ordem: '2027' }),
+      evento({ path: '05_Eventos/E-005.md', ano_ordem: '15' }),
+      evento({ path: '05_Eventos/E-003.md', ano_ordem: '15.5' }),
+    ];
+    const resultado = calcularRenumeracaoOrdemNarrativa(eventos);
+    // ordem por valor numérico atual: 15 (E-005) < 15.5 (E-003) < 2027 (E-002)
+    expect(resultado.map((r) => r.path)).toEqual(['05_Eventos/E-005.md', '05_Eventos/E-003.md', '05_Eventos/E-002.md']);
+    expect(resultado.map((r) => r.anoOrdemNovo)).toEqual(['1', '2', '3']);
+  });
+
+  it('não inclui eventos sem ano_ordem preenchido — posição ainda não decidida', () => {
+    const eventos = [
+      evento({ path: '05_Eventos/E-001.md', ano_ordem: '1' }),
+      evento({ path: '05_Eventos/E-002.md' }),
+    ];
+    const resultado = calcularRenumeracaoOrdemNarrativa(eventos);
+    expect(resultado).toHaveLength(1);
+    expect(resultado[0].path).toBe('05_Eventos/E-001.md');
+  });
+
+  it('preserva o valor antigo no resultado, pra dar visibilidade da mudança', () => {
+    const eventos = [evento({ path: '05_Eventos/E-001.md', ano_ordem: '2027' })];
+    const resultado = calcularRenumeracaoOrdemNarrativa(eventos);
+    expect(resultado[0].anoOrdemAntigo).toBe('2027');
+    expect(resultado[0].anoOrdemNovo).toBe('1');
+  });
+
+  it('não lança exceção com lista vazia', () => {
+    expect(() => calcularRenumeracaoOrdemNarrativa([])).not.toThrow();
+    expect(calcularRenumeracaoOrdemNarrativa([])).toEqual([]);
   });
 });

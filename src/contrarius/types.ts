@@ -65,7 +65,11 @@ export interface Evento {
   mov_historico?: string[];
   eventos_anteriores?: string[];
   eventos_posteriores?: string[];
-  // Ordem narrativa (ordem em que o leitor encontra a cena) vs. cronológica (data histórica) — ver Etapa 10.
+  // Posição da cena no manuscrito — número de sequência puro (1, 2, 3...), SEM relação com nenhum ano
+  // de calendário (nem o ano histórico do evento, nem o ano de uma eventual cena de "moldura" no
+  // presente — ver CLAUDE.md, decisão de 2026-07-14). `num_reg`/título/nome do arquivo ficam fixos ao
+  // reordenar; só este campo muda. Usar o botão "Renumerar ordem narrativa" do Dashboard pra manter
+  // sequencial sem buracos depois de reordenar manualmente. Cronológica (data histórica) = `data_inicio`.
   ano_ordem?: string;
   data_inicio?: string;
   data_fim?: string;

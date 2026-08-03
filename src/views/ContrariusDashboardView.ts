@@ -19,7 +19,7 @@ import {
   gerarTimelineCronologica,
   gerarTimelineNarrativa,
 } from '../contrarius/scrivener-export-estruturado';
-import { ordenarEventosParaTimeline } from '../contrarius/timeline';
+import { calcularRenumeracaoOrdemNarrativa, ordenarEventosParaTimeline } from '../contrarius/timeline';
 import type {
   AlertaContrarius,
   Evento,
@@ -224,6 +224,33 @@ export class ContrariusDashboardView extends ItemView {
     }
   }
 
+  // Renumera ano_ordem (posição narrativa) pra sequência limpa 1,2,3..., respeitando a ordem atual —
+  // nunca mexe em num_reg/título/nome do arquivo. Eventos sem ano_ordem ficam de fora (posição não
+  // decidida ainda). Usa fileManager.processFrontMatter (API do Obsidian), não edição manual de texto.
+  private async renumerarOrdemNarrativa(indice: IndiceContrarius): Promise<void> {
+    try {
+      const renumeracao = calcularRenumeracaoOrdemNarrativa(indice.eventos);
+      if (renumeracao.length === 0) {
+        new Notice('Nenhum evento com ano_ordem preenchido — nada para renumerar.');
+        return;
+      }
+      let alterados = 0;
+      for (const item of renumeracao) {
+        if (item.anoOrdemAntigo === item.anoOrdemNovo) continue;
+        const arquivo = this.app.vault.getAbstractFileByPath(item.path);
+        if (!(arquivo instanceof TFile)) continue;
+        await this.app.fileManager.processFrontMatter(arquivo, (fm) => {
+          fm.ano_ordem = item.anoOrdemNovo;
+        });
+        alterados++;
+      }
+      new Notice(`Ordem narrativa renumerada: ${alterados} evento(s) alterado(s) de ${renumeracao.length} no total.`);
+      await this.reindexarERenderizar();
+    } catch (erro) {
+      new Notice(`Falha ao renumerar: ${erro instanceof Error ? erro.message : String(erro)}`);
+    }
+  }
+
   // Etapa 12: pacote com manifest/README/integridade. Nome de pasta com timestamp — nunca sobrescreve
   // um pacote anterior. Write simples e sequencial, sem estado de modal: se falhar no meio, a Notice de
   // erro mostra exatamente onde parou, e o pacote parcial fica no disco pra inspeção (não é escondido).
@@ -367,6 +394,9 @@ export class ContrariusDashboardView extends ItemView {
 
     const botaoIndicesCampo = botoes.createEl('button', { text: 'Atualizar índices por livro/período' });
     botaoIndicesCampo.addEventListener('click', () => void this.atualizarIndicesPorCampo(indice));
+
+    const botaoRenumerar = botoes.createEl('button', { text: 'Renumerar ordem narrativa' });
+    botaoRenumerar.addEventListener('click', () => void this.renumerarOrdemNarrativa(indice));
 
     const resumo = container.createDiv({ cls: 'contrarius-dashboard-resumo' });
     const totais: Array<[string, number]> = [

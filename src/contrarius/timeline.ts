@@ -26,3 +26,23 @@ export function ordenarEventosParaTimeline(eventos: readonly Evento[], modo: Mod
 
   return { comData: ordenados, semData, campoUsado };
 }
+
+export interface RenumeracaoOrdemNarrativa {
+  path: string;
+  anoOrdemAntigo: string | undefined;
+  anoOrdemNovo: string;
+}
+
+// `ano_ordem` é a posição da cena no manuscrito — um número de sequência puro (1, 2, 3...), sem
+// relação com nenhum ano de calendário (nem o ano histórico do evento, nem um eventual ano de uma
+// cena de "moldura" no presente). Isso existe pra permitir reordenar cenas mudando só esse campo,
+// sem tocar em num_reg/título/nome do arquivo (que ficam fixos, porque outras notas referenciam por
+// wikilink). Eventos sem `ano_ordem` preenchido ficam de fora — posição ainda não decidida.
+export function calcularRenumeracaoOrdemNarrativa(eventos: readonly Evento[]): RenumeracaoOrdemNarrativa[] {
+  const { comData } = ordenarEventosParaTimeline(eventos, 'narrativa');
+  return comData.map((evento, indice) => ({
+    path: evento.path,
+    anoOrdemAntigo: evento.ano_ordem,
+    anoOrdemNovo: String(indice + 1),
+  }));
+}
