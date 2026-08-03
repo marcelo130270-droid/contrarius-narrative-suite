@@ -1,4 +1,5 @@
 import type { Evento } from './types';
+import { rotuloEntidade } from './agrupamento';
 
 export type ModoOrdenacaoTimeline = 'cronologica' | 'narrativa';
 
@@ -8,12 +9,20 @@ export interface EventosOrdenadosTimeline {
   campoUsado: 'data_inicio' | 'ano_ordem';
 }
 
+// Único lugar que decide "como chamar um evento pra exibição" — Dashboard e exportação estruturada
+// tinham cada um sua própria cópia quase igual (uma delas com fallback pior); consolidado aqui.
+export function rotuloEvento(evento: Evento): string {
+  return evento.titulo || evento.num_reg || rotuloEntidade(evento);
+}
+
 // Compartilhado entre o Dashboard (Etapa 10) e a exportação estruturada (Etapa 14) — mesma regra de
 // ordenação nos dois lugares, sem duplicar.
 export function ordenarEventosParaTimeline(eventos: readonly Evento[], modo: ModoOrdenacaoTimeline): EventosOrdenadosTimeline {
   const campoUsado = modo === 'cronologica' ? 'data_inicio' : 'ano_ordem';
   const comData = eventos.filter((e) => e[campoUsado]);
-  const semData = eventos.filter((e) => !e[campoUsado]);
+  // Eventos sem o campo de ordenação não têm posição definida — ficam ao final, mas pelo menos em
+  // ordem alfabética de título, não na ordem arbitrária em que o indexador os processou.
+  const semData = [...eventos.filter((e) => !e[campoUsado])].sort((a, b) => rotuloEvento(a).localeCompare(rotuloEvento(b)));
 
   const ordenados = [...comData].sort((a, b) => {
     const va = a[campoUsado] as string;

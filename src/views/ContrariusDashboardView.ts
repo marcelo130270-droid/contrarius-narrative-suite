@@ -19,10 +19,9 @@ import {
   gerarTimelineCronologica,
   gerarTimelineNarrativa,
 } from '../contrarius/scrivener-export-estruturado';
-import { calcularRenumeracaoOrdemNarrativa, ordenarEventosParaTimeline } from '../contrarius/timeline';
+import { calcularRenumeracaoOrdemNarrativa, ordenarEventosParaTimeline, rotuloEvento } from '../contrarius/timeline';
 import type {
   AlertaContrarius,
-  Evento,
   SeveridadeAlertaContrarius,
   TipoColecaoContrarius,
 } from '../contrarius/types';
@@ -35,10 +34,6 @@ const COLECOES_FILTRAVEIS: TipoColecaoContrarius[] = ['consciencias', 'retrovida
 const LIMITE_ALERTAS_EXIBIDOS = 50;
 
 type ModoTimeline = 'cronologica' | 'narrativa';
-
-function rotuloEvento(evento: Evento): string {
-  return evento.titulo || evento.num_reg || rotuloEntidade(evento);
-}
 
 const ROTULO_COLECAO: Record<TipoColecaoContrarius, string> = {
   consciencias: 'Consciências',

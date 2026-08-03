@@ -1,6 +1,5 @@
 import type { IndiceContrarius } from './indexer';
-import { ordenarEventosParaTimeline, type ModoOrdenacaoTimeline } from './timeline';
-import type { Evento } from './types';
+import { ordenarEventosParaTimeline, rotuloEvento, type ModoOrdenacaoTimeline } from './timeline';
 import {
   blocoConsciencia,
   blocoEvento,
@@ -12,10 +11,6 @@ import { CAMPOS_AGRUPAVEIS, rotuloEntidade } from './agrupamento';
 
 function linhaIndice(rotulo: string, path: string): string {
   return `- [${rotulo}](${path})`;
-}
-
-function rotuloEvento(e: Evento): string {
-  return e.titulo ?? e.num_reg ?? '(sem título)';
 }
 
 // Etapa 14, sub-fase 1: só o índice. Dossiê por tipo e timeline exportável vêm em sub-fases seguintes,
@@ -48,7 +43,7 @@ export function gerarIndiceEstruturado(indice: IndiceContrarius, geradoEm: Date 
 
   linhas.push('## Eventos');
   linhas.push('');
-  for (const e of indice.eventos) linhas.push(linhaIndice(e.titulo ?? e.num_reg ?? '(sem título)', e.path));
+  for (const e of indice.eventos) linhas.push(linhaIndice(rotuloEvento(e), e.path));
   linhas.push('');
 
   linhas.push('## Lugares');
