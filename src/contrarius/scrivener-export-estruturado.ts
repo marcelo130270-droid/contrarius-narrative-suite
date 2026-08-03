@@ -64,6 +64,12 @@ function gerarTimeline(indice: IndiceContrarius, modo: ModoOrdenacaoTimeline, ti
   // No modo cronológico, data_inicio/data_textual são só informativos (não usados pra ordenar) — ver
   // CLAUDE.md, decisão de 2026-08-03. Entram numa coluna à parte, só nesse modo.
   const mostrarColunaData = modo === 'cronologica';
+  // Eventos "atemporais" (sem ordem_cronologica) entram no início da tabela em vez de ficarem numa seção
+  // à parte — diferente do modo narrativo, onde posição ainda não decidida continua excluída (ver
+  // CLAUDE.md, decisão de 2026-08-03).
+  const atemporais = modo === 'cronologica' ? semData : [];
+  const linhasEventos = [...atemporais, ...comData];
+  const semDataRestante = modo === 'cronologica' ? [] : semData;
   const linhas: string[] = [];
 
   linhas.push(`# ${titulo}`);
@@ -72,16 +78,16 @@ function gerarTimeline(indice: IndiceContrarius, modo: ModoOrdenacaoTimeline, ti
   linhas.push('');
   linhas.push(`| Ordem${mostrarColunaData ? ' | Data' : ''} | Evento | Livro |`);
   linhas.push(`| ---${mostrarColunaData ? ' | ---' : ''} | --- | --- |`);
-  for (const e of comData) {
+  for (const e of linhasEventos) {
     const colunaData = mostrarColunaData ? ` | ${e.data_textual ?? e.data_inicio ?? ''}` : '';
     linhas.push(`| ${e[campoUsado] ?? ''}${colunaData} | [${rotuloEvento(e)}](${e.path}) | ${e.livro ?? ''} |`);
   }
   linhas.push('');
 
-  if (semData.length > 0) {
+  if (semDataRestante.length > 0) {
     linhas.push(`## Sem ${campoUsado} (não entram na ordenação acima)`);
     linhas.push('');
-    for (const e of semData) linhas.push(linhaIndice(rotuloEvento(e), e.path));
+    for (const e of semDataRestante) linhas.push(linhaIndice(rotuloEvento(e), e.path));
     linhas.push('');
   }
 

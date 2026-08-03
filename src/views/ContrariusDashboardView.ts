@@ -536,8 +536,15 @@ export class ContrariusDashboardView extends ItemView {
     // No modo cronológico, data_inicio/data_textual são só informativos (não usados pra ordenar) —
     // mostrados numa coluna à parte pra dar contexto, ver CLAUDE.md, decisão de 2026-08-03.
     const mostrarColunaData = this.modoTimeline === 'cronologica';
+    // Eventos "atemporais" (sem ordem_cronologica) entram no início da listagem cronológica em vez de
+    // ficarem de fora — diferente do modo narrativo, onde posição ainda não decidida continua excluída
+    // (ver CLAUDE.md, decisão de 2026-08-03). calcularRenumeracaoOrdem continua ignorando esses eventos,
+    // então "Renumerar" não atribui número a eles.
+    const atemporais = this.modoTimeline === 'cronologica' ? semData : [];
+    const linhasTabela = [...atemporais, ...comData];
+    const semDataRestante = this.modoTimeline === 'cronologica' ? [] : semData;
 
-    if (comData.length === 0) {
+    if (linhasTabela.length === 0) {
       secao.createEl('p', { text: 'Nenhum evento com dados suficientes para esta ordem.' });
     } else {
       const tabela = secao.createEl('table', { cls: 'contrarius-dashboard-timeline-tabela' });
@@ -546,7 +553,7 @@ export class ContrariusDashboardView extends ItemView {
       if (mostrarColunaData) cabecalho.createEl('th', { text: 'Data' });
       cabecalho.createEl('th', { text: 'Evento' });
       cabecalho.createEl('th', { text: 'Livro' });
-      for (const evento of comData) {
+      for (const evento of linhasTabela) {
         const linha = tabela.createEl('tr');
         linha.createEl('td', { text: (evento[chaveOrdenacao] as string) ?? '' });
         if (mostrarColunaData) linha.createEl('td', { text: evento.data_textual ?? evento.data_inicio ?? '' });
@@ -557,10 +564,10 @@ export class ContrariusDashboardView extends ItemView {
       }
     }
 
-    if (semData.length > 0) {
+    if (semDataRestante.length > 0) {
       secao.createEl('p', {
         cls: 'contrarius-dashboard-contagem',
-        text: `${semData.length} evento(s) sem "${chaveOrdenacao}" — não entram nesta ordenação.`,
+        text: `${semDataRestante.length} evento(s) sem "${chaveOrdenacao}" — não entram nesta ordenação.`,
       });
     }
   }

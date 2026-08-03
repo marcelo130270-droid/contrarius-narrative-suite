@@ -54,22 +54,25 @@ describe('gerarIndiceEstruturado', () => {
 });
 
 describe('gerarTimelineCronologica', () => {
-  it('ordena eventos por ordem_cronologica e separa os sem ordem numa seção à parte', () => {
+  it('ordena eventos por ordem_cronologica, com os sem ordem ("atemporais") no início da tabela', () => {
     const indice = indiceVazio();
     indice.eventos.push(
       { path: '05_Eventos/E-002.md', titulo: 'Depois', ordem_cronologica: '10', data_textual: 'Verão de 1250', metadata: {} },
       { path: '05_Eventos/E-001.md', titulo: 'Antes', ordem_cronologica: '2', data_inicio: '1200-01-01', metadata: {} },
-      { path: '05_Eventos/E-003.md', titulo: 'Sem ordem', metadata: {} },
+      { path: '05_Eventos/E-003.md', titulo: 'Atemporal', metadata: {} },
     );
 
     const md = gerarTimelineCronologica(indice, DATA_FIXA);
     expect(md).toContain('# Contrarius — Timeline cronológica');
+    const posAtemporal = md.indexOf('Atemporal');
     const posAntes = md.indexOf('Antes');
     const posDepois = md.indexOf('Depois');
-    expect(posAntes).toBeGreaterThan(0);
+    expect(posAtemporal).toBeGreaterThan(0);
+    expect(posAtemporal).toBeLessThan(posAntes);
     expect(posAntes).toBeLessThan(posDepois);
-    expect(md).toContain('## Sem ordem_cronologica');
-    expect(md).toContain('[Sem ordem](05_Eventos/E-003.md)');
+    // não fica mais numa seção à parte — entra na tabela principal, sem exclusão
+    expect(md).not.toContain('## Sem ordem_cronologica');
+    expect(md).toContain('[Atemporal](05_Eventos/E-003.md)');
     // data_inicio/data_textual continuam informativos, numa coluna à parte (não usados pra ordenar)
     expect(md).toContain('1200-01-01');
     expect(md).toContain('Verão de 1250');
@@ -91,6 +94,18 @@ describe('gerarTimelineNarrativa', () => {
     const md = gerarTimelineNarrativa(indice, DATA_FIXA);
     expect(md).toContain('# Contrarius — Timeline narrativa');
     expect(md.indexOf('Antes')).toBeLessThan(md.indexOf('Depois'));
+  });
+
+  it('diferente do modo cronológico, continua excluindo eventos sem ordem_narrativa numa seção à parte', () => {
+    const indice = indiceVazio();
+    indice.eventos.push(
+      { path: '05_Eventos/E-001.md', titulo: 'Com ordem', ordem_narrativa: '1', metadata: {} },
+      { path: '05_Eventos/E-002.md', titulo: 'Sem ordem', metadata: {} },
+    );
+
+    const md = gerarTimelineNarrativa(indice, DATA_FIXA);
+    expect(md).toContain('## Sem ordem_narrativa');
+    expect(md).toContain('[Sem ordem](05_Eventos/E-002.md)');
   });
 });
 
