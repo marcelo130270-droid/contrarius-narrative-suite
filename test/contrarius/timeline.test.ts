@@ -36,6 +36,16 @@ describe('ordenarEventosParaTimeline', () => {
     expect(comData.map((e) => e.titulo)).toEqual(['antes', 'depois']);
   });
 
+  it('modo escrita ordena por num_reg como string (zero-padded), refletindo a ordem em que foram criados', () => {
+    const eventos = [
+      evento({ titulo: 'depois', num_reg: 'E-010' }),
+      evento({ titulo: 'antes', num_reg: 'E-002' }),
+    ];
+    const { comData, campoUsado } = ordenarEventosParaTimeline(eventos, 'escrita');
+    expect(campoUsado).toBe('num_reg');
+    expect(comData.map((e) => e.titulo)).toEqual(['antes', 'depois']);
+  });
+
   it('separa eventos sem o campo usado em semData, sem quebrar a ordenação dos demais', () => {
     const eventos = [
       evento({ titulo: 'com-ordem', ordem_cronologica: '1' }),

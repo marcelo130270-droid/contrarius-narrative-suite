@@ -19,7 +19,13 @@ import {
   gerarTimelineCronologica,
   gerarTimelineNarrativa,
 } from '../contrarius/scrivener-export-estruturado';
-import { calcularRenumeracaoOrdem, ordenarEventosParaTimeline, rotuloEvento, type ModoOrdenacaoTimeline } from '../contrarius/timeline';
+import {
+  calcularRenumeracaoOrdem,
+  ordenarEventosParaTimeline,
+  rotuloEvento,
+  type ModoOrdenacaoTimeline,
+  type ModoRenumeravel,
+} from '../contrarius/timeline';
 import type {
   AlertaContrarius,
   SeveridadeAlertaContrarius,
@@ -221,7 +227,7 @@ export class ContrariusDashboardView extends ItemView {
   // limpa 1,2,3..., respeitando a ordem atual — nunca mexe em num_reg/título/nome do arquivo. Eventos sem
   // o campo do modo escolhido ficam de fora (posição não decidida ainda). Usa fileManager.processFrontMatter
   // (API do Obsidian), não edição manual de texto.
-  private async renumerarOrdem(indice: IndiceContrarius, modo: ModoOrdenacaoTimeline): Promise<void> {
+  private async renumerarOrdem(indice: IndiceContrarius, modo: ModoRenumeravel): Promise<void> {
     const rotuloModo = modo === 'cronologica' ? 'Ordem cronológica' : 'Ordem narrativa';
     try {
       const { campoUsado } = ordenarEventosParaTimeline(indice.eventos, modo);
@@ -526,7 +532,9 @@ export class ContrariusDashboardView extends ItemView {
     const seletor = secao.createEl('select');
     const opcaoCronologica = seletor.createEl('option', { text: 'Ordem cronológica (ordem_cronologica)', value: 'cronologica' });
     const opcaoNarrativa = seletor.createEl('option', { text: 'Ordem narrativa (ordem_narrativa)', value: 'narrativa' });
-    (this.modoTimeline === 'cronologica' ? opcaoCronologica : opcaoNarrativa).selected = true;
+    const opcaoEscrita = seletor.createEl('option', { text: 'Ordem de escrita (num_reg)', value: 'escrita' });
+    const opcaoAtual = { cronologica: opcaoCronologica, narrativa: opcaoNarrativa, escrita: opcaoEscrita }[this.modoTimeline];
+    opcaoAtual.selected = true;
     seletor.addEventListener('change', () => {
       this.modoTimeline = seletor.value as ModoOrdenacaoTimeline;
       this.renderizar();
