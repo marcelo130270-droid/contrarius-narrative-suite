@@ -558,16 +558,16 @@ export class ContrariusDashboardView extends ItemView {
       const tabela = secao.createEl('table', { cls: 'contrarius-dashboard-timeline-tabela' });
       const cabecalho = tabela.createEl('tr');
       cabecalho.createEl('th', { text: 'Ordem' });
-      if (mostrarColunaData) cabecalho.createEl('th', { text: 'Data' });
       cabecalho.createEl('th', { text: 'Evento' });
+      if (mostrarColunaData) cabecalho.createEl('th', { text: 'Data' });
       cabecalho.createEl('th', { text: 'Livro' });
       for (const evento of linhasTabela) {
         const linha = tabela.createEl('tr');
         linha.createEl('td', { text: (evento[chaveOrdenacao] as string) ?? '' });
-        if (mostrarColunaData) linha.createEl('td', { text: evento.data_textual ?? evento.data_inicio ?? '' });
         const celulaEvento = linha.createEl('td');
         const link = celulaEvento.createEl('code', { text: rotuloEvento(evento), cls: 'contrarius-dashboard-caminho' });
         link.addEventListener('click', () => void this.abrirNota(evento.path));
+        if (mostrarColunaData) linha.createEl('td', { text: evento.data_textual ?? evento.data_inicio ?? '' });
         linha.createEl('td', { text: evento.livro ?? '' });
       }
     }

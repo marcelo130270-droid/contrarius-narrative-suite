@@ -76,11 +76,11 @@ function gerarTimeline(indice: IndiceContrarius, modo: ModoOrdenacaoTimeline, ti
   linhas.push('');
   linhas.push(`Gerado em: ${geradoEm.toISOString()}`);
   linhas.push('');
-  linhas.push(`| Ordem${mostrarColunaData ? ' | Data' : ''} | Evento | Livro |`);
-  linhas.push(`| ---${mostrarColunaData ? ' | ---' : ''} | --- | --- |`);
+  linhas.push(`| Ordem | Evento${mostrarColunaData ? ' | Data' : ''} | Livro |`);
+  linhas.push(`| --- | ---${mostrarColunaData ? ' | ---' : ''} | --- |`);
   for (const e of linhasEventos) {
     const colunaData = mostrarColunaData ? ` | ${e.data_textual ?? e.data_inicio ?? ''}` : '';
-    linhas.push(`| ${e[campoUsado] ?? ''}${colunaData} | [${rotuloEvento(e)}](${e.path}) | ${e.livro ?? ''} |`);
+    linhas.push(`| ${e[campoUsado] ?? ''} | [${rotuloEvento(e)}](${e.path})${colunaData} | ${e.livro ?? ''} |`);
   }
   linhas.push('');
 
