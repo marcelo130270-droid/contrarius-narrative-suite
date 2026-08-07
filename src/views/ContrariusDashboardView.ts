@@ -541,9 +541,8 @@ export class ContrariusDashboardView extends ItemView {
     });
 
     const { comData, semData, campoUsado: chaveOrdenacao } = ordenarEventosParaTimeline(indice.eventos, this.modoTimeline);
-    // No modo cronológico, data_inicio/data_textual são só informativos (não usados pra ordenar) —
-    // mostrados numa coluna à parte pra dar contexto, ver CLAUDE.md, decisão de 2026-08-03.
-    const mostrarColunaData = this.modoTimeline === 'cronologica';
+    // data_inicio/data_textual são só informativos em todo modo (não usados pra ordenar em nenhum dos
+    // três) — mostrados numa coluna à parte pra dar contexto, ver CLAUDE.md, decisão de 2026-08-03.
     // Eventos "atemporais" (sem ordem_cronologica) entram no início da listagem cronológica em vez de
     // ficarem de fora — diferente do modo narrativo, onde posição ainda não decidida continua excluída
     // (ver CLAUDE.md, decisão de 2026-08-03). calcularRenumeracaoOrdem continua ignorando esses eventos,
@@ -559,7 +558,7 @@ export class ContrariusDashboardView extends ItemView {
       const cabecalho = tabela.createEl('tr');
       cabecalho.createEl('th', { text: 'Ordem' });
       cabecalho.createEl('th', { text: 'Evento' });
-      if (mostrarColunaData) cabecalho.createEl('th', { text: 'Data' });
+      cabecalho.createEl('th', { text: 'Data' });
       cabecalho.createEl('th', { text: 'Livro' });
       for (const evento of linhasTabela) {
         const linha = tabela.createEl('tr');
@@ -567,7 +566,7 @@ export class ContrariusDashboardView extends ItemView {
         const celulaEvento = linha.createEl('td');
         const link = celulaEvento.createEl('code', { text: rotuloEvento(evento), cls: 'contrarius-dashboard-caminho' });
         link.addEventListener('click', () => void this.abrirNota(evento.path));
-        if (mostrarColunaData) linha.createEl('td', { text: evento.data_textual ?? evento.data_inicio ?? '' });
+        linha.createEl('td', { text: evento.data_textual ?? evento.data_inicio ?? '' });
         linha.createEl('td', { text: evento.livro ?? '' });
       }
     }

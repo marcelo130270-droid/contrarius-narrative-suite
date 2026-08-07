@@ -61,9 +61,8 @@ export function gerarIndiceEstruturado(indice: IndiceContrarius, geradoEm: Date 
 
 function gerarTimeline(indice: IndiceContrarius, modo: ModoOrdenacaoTimeline, titulo: string, geradoEm: Date): string {
   const { comData, semData, campoUsado } = ordenarEventosParaTimeline(indice.eventos, modo);
-  // No modo cronológico, data_inicio/data_textual são só informativos (não usados pra ordenar) — ver
-  // CLAUDE.md, decisão de 2026-08-03. Entram numa coluna à parte, só nesse modo.
-  const mostrarColunaData = modo === 'cronologica';
+  // data_inicio/data_textual são só informativos em todo modo (não usados pra ordenar em nenhum dos
+  // três) — ver CLAUDE.md, decisão de 2026-08-03.
   // Eventos "atemporais" (sem ordem_cronologica) entram no início da tabela em vez de ficarem numa seção
   // à parte — diferente do modo narrativo, onde posição ainda não decidida continua excluída (ver
   // CLAUDE.md, decisão de 2026-08-03).
@@ -76,11 +75,10 @@ function gerarTimeline(indice: IndiceContrarius, modo: ModoOrdenacaoTimeline, ti
   linhas.push('');
   linhas.push(`Gerado em: ${geradoEm.toISOString()}`);
   linhas.push('');
-  linhas.push(`| Ordem | Evento${mostrarColunaData ? ' | Data' : ''} | Livro |`);
-  linhas.push(`| --- | ---${mostrarColunaData ? ' | ---' : ''} | --- |`);
+  linhas.push('| Ordem | Evento | Data | Livro |');
+  linhas.push('| --- | --- | --- | --- |');
   for (const e of linhasEventos) {
-    const colunaData = mostrarColunaData ? ` | ${e.data_textual ?? e.data_inicio ?? ''}` : '';
-    linhas.push(`| ${e[campoUsado] ?? ''} | [${rotuloEvento(e)}](${e.path})${colunaData} | ${e.livro ?? ''} |`);
+    linhas.push(`| ${e[campoUsado] ?? ''} | [${rotuloEvento(e)}](${e.path}) | ${e.data_textual ?? e.data_inicio ?? ''} | ${e.livro ?? ''} |`);
   }
   linhas.push('');
 

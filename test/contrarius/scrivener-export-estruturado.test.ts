@@ -96,6 +96,21 @@ describe('gerarTimelineNarrativa', () => {
     expect(md.indexOf('Antes')).toBeLessThan(md.indexOf('Depois'));
   });
 
+  it('mostra data_textual/data_inicio como coluna informativa também no modo narrativo', () => {
+    const indice = indiceVazio();
+    indice.eventos.push({
+      path: '05_Eventos/E-001.md',
+      titulo: 'Com data',
+      ordem_narrativa: '1',
+      data_textual: 'Outono de 1229',
+      metadata: {},
+    });
+
+    const md = gerarTimelineNarrativa(indice, DATA_FIXA);
+    expect(md).toContain('| Ordem | Evento | Data | Livro |');
+    expect(md).toContain('Outono de 1229');
+  });
+
   it('diferente do modo cronológico, continua excluindo eventos sem ordem_narrativa numa seção à parte', () => {
     const indice = indiceVazio();
     indice.eventos.push(
