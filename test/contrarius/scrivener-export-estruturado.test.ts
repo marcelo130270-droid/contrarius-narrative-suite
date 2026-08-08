@@ -111,7 +111,7 @@ describe('gerarTimelineNarrativa', () => {
     expect(md).toContain('Outono de 1229');
   });
 
-  it('diferente do modo cronológico, continua excluindo eventos sem ordem_narrativa numa seção à parte', () => {
+  it('mesmo comportamento do modo cronológico: eventos sem ordem_narrativa entram no início da tabela, não numa seção à parte', () => {
     const indice = indiceVazio();
     indice.eventos.push(
       { path: '05_Eventos/E-001.md', titulo: 'Com ordem', ordem_narrativa: '1', metadata: {} },
@@ -119,8 +119,9 @@ describe('gerarTimelineNarrativa', () => {
     );
 
     const md = gerarTimelineNarrativa(indice, DATA_FIXA);
-    expect(md).toContain('## Sem ordem_narrativa');
+    expect(md).not.toContain('## Sem ordem_narrativa');
     expect(md).toContain('[Sem ordem](05_Eventos/E-002.md)');
+    expect(md.indexOf('Sem ordem')).toBeLessThan(md.indexOf('Com ordem'));
   });
 });
 

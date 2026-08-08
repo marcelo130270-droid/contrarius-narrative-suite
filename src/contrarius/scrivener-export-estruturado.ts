@@ -63,12 +63,12 @@ function gerarTimeline(indice: IndiceContrarius, modo: ModoOrdenacaoTimeline, ti
   const { comData, semData, campoUsado } = ordenarEventosParaTimeline(indice.eventos, modo);
   // data_inicio/data_textual são só informativos em todo modo (não usados pra ordenar em nenhum dos
   // três) — ver CLAUDE.md, decisão de 2026-08-03.
-  // Eventos "atemporais" (sem ordem_cronologica) entram no início da tabela em vez de ficarem numa seção
-  // à parte — diferente do modo narrativo, onde posição ainda não decidida continua excluída (ver
-  // CLAUDE.md, decisão de 2026-08-03).
-  const atemporais = modo === 'cronologica' ? semData : [];
-  const linhasEventos = [...atemporais, ...comData];
-  const semDataRestante = modo === 'cronologica' ? [] : semData;
+  // Eventos sem posição decidida entram no início da tabela em vez de ficarem numa seção à parte, pra
+  // serem fáceis de identificar (mesma regra do Dashboard — ver CLAUDE.md, decisão de 2026-08-03).
+  const semOrdemNoTopo = modo !== 'escrita';
+  const semPosicao = semOrdemNoTopo ? semData : [];
+  const linhasEventos = [...semPosicao, ...comData];
+  const semDataRestante = semOrdemNoTopo ? [] : semData;
   const linhas: string[] = [];
 
   linhas.push(`# ${titulo}`);

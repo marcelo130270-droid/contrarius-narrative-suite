@@ -543,13 +543,15 @@ export class ContrariusDashboardView extends ItemView {
     const { comData, semData, campoUsado: chaveOrdenacao } = ordenarEventosParaTimeline(indice.eventos, this.modoTimeline);
     // data_inicio/data_textual são só informativos em todo modo (não usados pra ordenar em nenhum dos
     // três) — mostrados numa coluna à parte pra dar contexto, ver CLAUDE.md, decisão de 2026-08-03.
-    // Eventos "atemporais" (sem ordem_cronologica) entram no início da listagem cronológica em vez de
-    // ficarem de fora — diferente do modo narrativo, onde posição ainda não decidida continua excluída
-    // (ver CLAUDE.md, decisão de 2026-08-03). calcularRenumeracaoOrdem continua ignorando esses eventos,
-    // então "Renumerar" não atribui número a eles.
-    const atemporais = this.modoTimeline === 'cronologica' ? semData : [];
-    const linhasTabela = [...atemporais, ...comData];
-    const semDataRestante = this.modoTimeline === 'cronologica' ? [] : semData;
+    // Eventos sem posição decidida (ordem_cronologica/ordem_narrativa vazios) entram no início da
+    // listagem, em vez de ficarem de fora, pra serem fáceis de identificar e preencher — nos modos
+    // cronológico e narrativo. No modo de escrita não se aplica (num_reg é obrigatório, sempre
+    // preenchido). calcularRenumeracaoOrdem continua ignorando esses eventos, então "Renumerar" não
+    // atribui número a eles (ver CLAUDE.md, decisão de 2026-08-03).
+    const semOrdemNoTopo = this.modoTimeline !== 'escrita';
+    const semPosicao = semOrdemNoTopo ? semData : [];
+    const linhasTabela = [...semPosicao, ...comData];
+    const semDataRestante = semOrdemNoTopo ? [] : semData;
 
     if (linhasTabela.length === 0) {
       secao.createEl('p', { text: 'Nenhum evento com dados suficientes para esta ordem.' });
