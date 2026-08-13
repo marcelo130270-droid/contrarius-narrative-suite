@@ -11916,6 +11916,21 @@ body.mod-rtl .storyteller-group-members {
   white-space: nowrap;
 }
 
+/* Ordem/num_reg/Parte ~15% mais estreitas que a largura natural do conteúdo (pedido do usuário). */
+.contrarius-dashboard-timeline-tabela .contrarius-dashboard-timeline-col-ordem {
+  width: 4.3ch;
+  white-space: nowrap;
+}
+
+.contrarius-dashboard-timeline-tabela .contrarius-dashboard-timeline-col-num-reg {
+  width: 6ch;
+  white-space: nowrap;
+}
+
+.contrarius-dashboard-timeline-tabela .contrarius-dashboard-timeline-col-parte {
+  width: 6ch;
+}
+
 .contrarius-dashboard-timeline-tabela .contrarius-dashboard-timeline-col-data {
   max-width: 10em;
 }
