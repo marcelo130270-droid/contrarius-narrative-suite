@@ -11909,6 +11909,17 @@ body.mod-rtl .storyteller-group-members {
   border-bottom: 1px solid var(--background-modifier-border);
 }
 
+/* Parte/Livro não quebram linha (largura cresce pra caber o texto); Data cede o espaço, quebrando
+   linha se precisar — pedido do usuário depois de ver "Parte 1" e "1 Rogier Furioso" quebrados. */
+.contrarius-dashboard-timeline-tabela .contrarius-dashboard-timeline-col-parte,
+.contrarius-dashboard-timeline-tabela .contrarius-dashboard-timeline-col-livro {
+  white-space: nowrap;
+}
+
+.contrarius-dashboard-timeline-tabela .contrarius-dashboard-timeline-col-data {
+  max-width: 6em;
+}
+
 .contrarius-dashboard-verificacao {
   margin-top: var(--size-4-4);
 }
