@@ -561,7 +561,7 @@ export class ContrariusDashboardView extends ItemView {
       cabecalho.createEl('th', { text: 'Ordem' });
       cabecalho.createEl('th', { text: 'num_reg' });
       cabecalho.createEl('th', { text: 'Parte', cls: 'contrarius-dashboard-timeline-col-parte' });
-      cabecalho.createEl('th', { text: 'Evento' });
+      cabecalho.createEl('th', { text: 'Evento', cls: 'contrarius-dashboard-timeline-col-evento' });
       cabecalho.createEl('th', { text: 'Data', cls: 'contrarius-dashboard-timeline-col-data' });
       cabecalho.createEl('th', { text: 'Livro', cls: 'contrarius-dashboard-timeline-col-livro' });
       for (const evento of linhasTabela) {
@@ -569,7 +569,7 @@ export class ContrariusDashboardView extends ItemView {
         linha.createEl('td', { text: (evento[chaveOrdenacao] as string) ?? '' });
         linha.createEl('td', { text: evento.num_reg ?? '' });
         linha.createEl('td', { text: evento.parte?.join(', ') ?? '', cls: 'contrarius-dashboard-timeline-col-parte' });
-        const celulaEvento = linha.createEl('td');
+        const celulaEvento = linha.createEl('td', { cls: 'contrarius-dashboard-timeline-col-evento' });
         const link = celulaEvento.createEl('code', { text: rotuloEvento(evento), cls: 'contrarius-dashboard-caminho' });
         link.addEventListener('click', () => void this.abrirNota(evento.path));
         linha.createEl('td', { text: evento.data_textual ?? evento.data_inicio ?? '', cls: 'contrarius-dashboard-timeline-col-data' });
