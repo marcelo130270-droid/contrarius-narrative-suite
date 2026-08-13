@@ -131,6 +131,14 @@ describe('normalizarEvento', () => {
     expect(entidade.titulo).toBe('Título alternativo');
   });
 
+  it('captura livro e parte', () => {
+    const { entidade } = normalizarEvento(
+      nota('05_Eventos/E-091.md', { num_reg: 'E-091', livro: '1 Rogier Furioso', parte: 'Parte 1' }),
+    );
+    expect(entidade.livro).toBe('1 Rogier Furioso');
+    expect(entidade.parte).toBe('Parte 1');
+  });
+
   it('captura ordem_narrativa/ordem_cronologica/data_textual como string e tolera data_inicio/data_fim vindo como Date (YAML sem aspas)', () => {
     const { entidade } = normalizarEvento(
       nota('05_Eventos/E-001.md', {

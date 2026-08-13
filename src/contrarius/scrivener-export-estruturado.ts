@@ -75,10 +75,10 @@ function gerarTimeline(indice: IndiceContrarius, modo: ModoOrdenacaoTimeline, ti
   linhas.push('');
   linhas.push(`Gerado em: ${geradoEm.toISOString()}`);
   linhas.push('');
-  linhas.push('| Ordem | num_reg | Evento | Data | Livro |');
-  linhas.push('| --- | --- | --- | --- | --- |');
+  linhas.push('| Ordem | num_reg | Parte | Evento | Data | Livro |');
+  linhas.push('| --- | --- | --- | --- | --- | --- |');
   for (const e of linhasEventos) {
-    linhas.push(`| ${e[campoUsado] ?? ''} | ${e.num_reg ?? ''} | [${rotuloEvento(e)}](${e.path}) | ${e.data_textual ?? e.data_inicio ?? ''} | ${e.livro ?? ''} |`);
+    linhas.push(`| ${e[campoUsado] ?? ''} | ${e.num_reg ?? ''} | ${e.parte ?? ''} | [${rotuloEvento(e)}](${e.path}) | ${e.data_textual ?? e.data_inicio ?? ''} | ${e.livro ?? ''} |`);
   }
   linhas.push('');
 

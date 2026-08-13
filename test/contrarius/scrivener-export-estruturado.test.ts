@@ -96,13 +96,20 @@ describe('gerarTimelineNarrativa', () => {
     expect(md.indexOf('Antes')).toBeLessThan(md.indexOf('Depois'));
   });
 
-  it('mostra num_reg numa coluna própria, entre Ordem e Evento', () => {
+  it('mostra num_reg e parte em colunas próprias, entre Ordem e Evento', () => {
     const indice = indiceVazio();
-    indice.eventos.push({ path: '05_Eventos/E-001.md', titulo: 'Evento X', num_reg: 'E-001', ordem_narrativa: '1', metadata: {} });
+    indice.eventos.push({
+      path: '05_Eventos/E-001.md',
+      titulo: 'Evento X',
+      num_reg: 'E-001',
+      parte: 'Parte 1',
+      ordem_narrativa: '1',
+      metadata: {},
+    });
 
     const md = gerarTimelineNarrativa(indice, DATA_FIXA);
-    expect(md).toContain('| Ordem | num_reg | Evento | Data | Livro |');
-    expect(md).toContain('| 1 | E-001 | [Evento X]');
+    expect(md).toContain('| Ordem | num_reg | Parte | Evento | Data | Livro |');
+    expect(md).toContain('| 1 | E-001 | Parte 1 | [Evento X]');
   });
 
   it('mostra data_textual/data_inicio como coluna informativa também no modo narrativo', () => {
@@ -116,7 +123,7 @@ describe('gerarTimelineNarrativa', () => {
     });
 
     const md = gerarTimelineNarrativa(indice, DATA_FIXA);
-    expect(md).toContain('| Ordem | num_reg | Evento | Data | Livro |');
+    expect(md).toContain('| Ordem | num_reg | Parte | Evento | Data | Livro |');
     expect(md).toContain('Outono de 1229');
   });
 
