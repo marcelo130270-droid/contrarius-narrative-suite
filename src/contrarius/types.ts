@@ -59,7 +59,7 @@ export interface Evento {
   periodo?: string[];
   nucleo_geo?: string[];
   livro?: string;
-  parte?: string;
+  parte?: string[];
   retrovidas?: string[];
   holopensenes?: string[];
   religiao?: string;

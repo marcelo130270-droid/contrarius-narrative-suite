@@ -568,7 +568,7 @@ export class ContrariusDashboardView extends ItemView {
         const linha = tabela.createEl('tr');
         linha.createEl('td', { text: (evento[chaveOrdenacao] as string) ?? '' });
         linha.createEl('td', { text: evento.num_reg ?? '' });
-        linha.createEl('td', { text: evento.parte ?? '' });
+        linha.createEl('td', { text: evento.parte?.join(', ') ?? '' });
         const celulaEvento = linha.createEl('td');
         const link = celulaEvento.createEl('code', { text: rotuloEvento(evento), cls: 'contrarius-dashboard-caminho' });
         link.addEventListener('click', () => void this.abrirNota(evento.path));

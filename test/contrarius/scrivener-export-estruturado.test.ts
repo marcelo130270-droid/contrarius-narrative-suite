@@ -102,7 +102,7 @@ describe('gerarTimelineNarrativa', () => {
       path: '05_Eventos/E-001.md',
       titulo: 'Evento X',
       num_reg: 'E-001',
-      parte: 'Parte 1',
+      parte: ['Parte 1'],
       ordem_narrativa: '1',
       metadata: {},
     });

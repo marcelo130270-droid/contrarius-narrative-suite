@@ -52,7 +52,7 @@ export function normalizarEvento(nota: NotaContrariusBruta): ResultadoNormalizac
     periodo: getStrArray(fm, 'periodo'),
     nucleo_geo: getStrArray(fm, 'nucleo_geo'),
     livro: getStr(fm, 'livro'),
-    parte: getStr(fm, 'parte'),
+    parte: getStrArray(fm, 'parte'),
     retrovidas,
     holopensenes: getStrArray(fm, 'holopensenes'),
     religiao: getStr(fm, 'religiao'),
